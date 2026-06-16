@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>EventRack Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    body {
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      background-size: 200% 200%;
+      animation: gradientBG 15s ease infinite;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    @keyframes gradientBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    .container {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 15px 35px rgba(0,0,0,0.2),
+                  0 0 20px rgba(102, 126, 234, 0.1);
+      width: 100%;
+      max-width: 400px;
+      text-align: center;
+      transform: translateY(0);
+      transition: transform 0.3s ease;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .container:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 20px 40px rgba(0,0,0,0.3),
+                  0 0 30px rgba(102, 126, 234, 0.2);
+    }
+
+    h2 {
+      margin-bottom: 30px;
+      color: #fff;
+      font-weight: 600;
+      font-size: 28px;
+      text-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+    }
+
+    select, input, button {
+      width: 100%;
+      padding: 15px;
+      margin: 10px 0;
+      font-size: 1rem;
+      border-radius: 10px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.3s ease;
+      outline: none;
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+    }
+
+    select:focus, input:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+    }
+
+    button {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      font-weight: 500;
+      border: none;
+      cursor: pointer;
+      margin-top: 20px;
+      transition: all 0.3s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    button::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+      animation: shine 2s infinite;
+    }
+
+    @keyframes shine {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+
+    .form-group {
+      display: none;
+      animation: fadeIn 0.5s ease;
+    }
+
+    .form-group.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .input-group {
+      position: relative;
+      margin: 15px 0;
+    }
+
+    .input-group i {
+      position: absolute;
+      left: 15px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #667eea;
+    }
+
+    .input-group input {
+      padding-left: 45px;
+    }
+
+    #formSelector {
+      background: rgba(255, 255, 255, 0.1);
+      cursor: pointer;
+      margin-bottom: 20px;
+      color: #fff;
+    }
+
+    .error-message {
+      color: #ff6b6b;
+      font-size: 0.9rem;
+      margin-top: 5px;
+      display: none;
+      animation: shake 0.5s ease;
+      text-shadow: 0 0 5px rgba(255, 107, 107, 0.5);
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      25% { transform: translateX(-5px); }
+      75% { transform: translateX(5px); }
+    }
+
+    .role-selector {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .role-option {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      color: #fff;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .role-option.active {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      border-color: #667eea;
+    }
+
+    .role-option i {
+      margin-right: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>EventRack Portal</h2>
+    
+    <select id="formSelector">
+      <option value="admin">Admin Login</option>
+      <option value="user">User Login</option>
+      <option value="register">Registration</option>
+    </select>
+
+    <!-- Admin Login -->
+    <form id="adminForm" class="form-group active">
+      <div class="input-group">
+        <i class="fas fa-user-shield"></i>
+        <input type="text" id="adminUsername" placeholder="Admin Username" required>
+      </div>
+      <div class="input-group">
+        <i class="fas fa-lock"></i>
+        <input type="password" id="adminPassword" placeholder="Password" required>
+      </div>
+      <div class="error-message" id="adminError"></div>
+      <button type="submit">Login as Admin</button>
+    </form>
+
+    <!-- User Login -->
+    <form id="userForm" class="form-group">
+      <div class="input-group">
+        <i class="fas fa-user"></i>
+        <input type="text" id="userUsername" placeholder="User Username" required>
+      </div>
+      <div class="input-group">
+        <i class="fas fa-lock"></i>
+        <input type="password" id="userPassword" placeholder="Password" required>
+      </div>
+      <div class="error-message" id="userError"></div>
+      <button type="submit">Login as User</button>
+    </form>
+
+    <!-- Registration -->
+    <form id="registerForm" class="form-group">
+      <div class="role-selector">
+        <div class="role-option active" data-role="user">
+          <i class="fas fa-user"></i> User
+        </div>
+        <div class="role-option" data-role="admin">
+          <i class="fas fa-user-shield"></i> Admin
+        </div>
+      </div>
+      <div class="input-group">
+        <i class="fas fa-user"></i>
+        <input type="text" id="newUser" placeholder="New Username" required>
+      </div>
+      <div class="input-group">
+        <i class="fas fa-lock"></i>
+        <input type="password" id="newPass" placeholder="New Password" required>
+      </div>
+      <div class="error-message" id="registerError"></div>
+      <button type="submit">Register</button>
+    </form>
+  </div>
+
+  <script>
+    const selector = document.getElementById("formSelector");
+    const forms = {
+      admin: document.getElementById("adminForm"),
+      user: document.getElementById("userForm"),
+      register: document.getElementById("registerForm"),
+    };
+
+    // Role selection for registration
+    const roleOptions = document.querySelectorAll('.role-option');
+    let selectedRole = 'user';
+
+    roleOptions.forEach(option => {
+      option.addEventListener('click', () => {
+        roleOptions.forEach(opt => opt.classList.remove('active'));
+        option.classList.add('active');
+        selectedRole = option.dataset.role;
+      });
+    });
+
+    selector.addEventListener("change", () => {
+      for (let key in forms) {
+        forms[key].classList.remove("active");
+      }
+      forms[selector.value].classList.add("active");
+    });
+
+    function showError(element, message) {
+      const errorDiv = document.getElementById(element + 'Error');
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+      setTimeout(() => {
+        errorDiv.style.display = 'none';
+      }, 3000);
+    }
+
+    // Admin Login
+    forms.admin.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const username = document.getElementById("adminUsername").value;
+      const password = document.getElementById("adminPassword").value;
+
+      fetch('/login/admin', {
+        method: 'POST',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          window.location.href = "/admin";
+        } else {
+          showError('admin', "Invalid Admin Credentials");
+        }
+      })
+      .catch(() => showError('admin', "An error occurred"));
+    });
+
+    // User Login
+    forms.user.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const username = document.getElementById("userUsername").value;
+      const password = document.getElementById("userPassword").value;
+
+      fetch('/login/user', {
+        method: 'POST',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          window.location.href = "/user";
+        } else {
+          showError('user', "Invalid User Credentials");
+        }
+      })
+      .catch(() => showError('user', "An error occurred"));
+    });
+
+    // Registration
+    forms.register.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const username = document.getElementById("newUser").value;
+      const password = document.getElementById("newPass").value;
+
+      const endpoint = selectedRole === 'admin' ? '/register/admin' : '/register/user';
+
+      fetch(endpoint, {
+        method: 'POST',
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert(`Registration successful! Please login as ${selectedRole}.`);
+          selector.value = selectedRole;
+          selector.dispatchEvent(new Event('change'));
+        } else {
+          showError('register', data.message || "Registration failed");
+        }
+      })
+      .catch(() => showError('register', "An error occurred"));
+    });
+  </script>
+</body>
+</html>

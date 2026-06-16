@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventRack Settings</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+
+        .dashboard {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: #1a1a2e;
+            color: white;
+            padding: 20px;
+            position: fixed;
+            height: 100vh;
+        }
+
+        .sidebar h2 {
+            margin-bottom: 30px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .nav-item {
+            padding: 12px 15px;
+            margin: 5px 0;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .nav-item:hover {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .nav-item.active {
+            background: #667eea;
+        }
+
+        .nav-item i {
+            margin-right: 10px;
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 30px;
+            width: calc(100% - 250px);
+        }
+
+        .header {
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #1a1a2e;
+            margin-bottom: 10px;
+        }
+
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .settings-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .settings-card h2 {
+            color: #1a1a2e;
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+        }
+
+        .form-group input[type="text"],
+        .form-group input[type="number"],
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .color-picker {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .color-option {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid transparent;
+        }
+
+        .color-option.active {
+            border-color: #1a1a2e;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            background: #667eea;
+            color: white;
+        }
+
+        .btn:hover {
+            background: #5a6fd6;
+        }
+
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 24px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: .4s;
+            border-radius: 24px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 16px;
+            width: 16px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background-color: #667eea;
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(26px);
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 25px;
+            background: #4CAF50;
+            color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: none;
+            z-index: 1000;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="sidebar">
+            <h2>EventRack</h2>
+            <a href="/admin" class="nav-item">
+                <i class="fas fa-calendar-alt"></i> Events
+            </a>
+            <a href="/users" class="nav-item">
+                <i class="fas fa-users"></i> Users
+            </a>
+            <a href="/settings" class="nav-item active">
+                <i class="fas fa-cog"></i> Settings
+            </a>
+        </div>
+
+        <div class="main-content">
+            <div class="header">
+                <h1>Settings</h1>
+                <p>Customize your EventRack experience</p>
+            </div>
+
+            <div class="settings-grid">
+                <div class="settings-card">
+                    <h2>Theme Settings</h2>
+                    <div class="form-group">
+                        <label>Color Theme</label>
+                        <div class="color-picker">
+                            <div class="color-option active" style="background: #667eea" data-color="blue"></div>
+                            <div class="color-option" style="background: #48bb78" data-color="green"></div>
+                            <div class="color-option" style="background: #ed64a6" data-color="pink"></div>
+                            <div class="color-option" style="background: #ecc94b" data-color="yellow"></div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Dark Mode</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="darkMode">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-card">
+                    <h2>General Settings</h2>
+                    <div class="form-group">
+                        <label>Default View</label>
+                        <select id="defaultView">
+                            <option value="grid">Grid View</option>
+                            <option value="list">List View</option>
+                            <option value="calendar">Calendar View</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Events per Page</label>
+                        <input type="number" id="eventsPerPage" min="5" max="50" value="12">
+                    </div>
+                    <div class="form-group">
+                        <label>Enable Notifications</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="notifications" checked>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="settings-card">
+                    <h2>Email Settings</h2>
+                    <div class="form-group">
+                        <label>Email Notifications</label>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="emailNotifications">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="text" id="emailAddress" placeholder="Enter email address">
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn" style="margin-top: 20px;" onclick="saveSettings()">Save Settings</button>
+        </div>
+    </div>
+
+    <div class="notification" id="notification">Settings saved successfully!</div>
+
+    <script>
+        // Theme color selection
+        const colorOptions = document.querySelectorAll('.color-option');
+        colorOptions.forEach(option => {
+            option.addEventListener('click', () => {
+                colorOptions.forEach(opt => opt.classList.remove('active'));
+                option.classList.add('active');
+                // Here you would typically update the theme
+                console.log('Selected color:', option.dataset.color);
+            });
+        });
+
+        // Save settings
+        function saveSettings() {
+            const settings = {
+                theme: document.querySelector('.color-option.active').dataset.color,
+                darkMode: document.getElementById('darkMode').checked,
+                defaultView: document.getElementById('defaultView').value,
+                eventsPerPage: document.getElementById('eventsPerPage').value,
+                notifications: document.getElementById('notifications').checked,
+                emailNotifications: document.getElementById('emailNotifications').checked,
+                emailAddress: document.getElementById('emailAddress').value
+            };
+
+            // Here you would typically send this to your backend
+            console.log('Saving settings:', settings);
+
+            // Show notification
+            const notification = document.getElementById('notification');
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        }
+
+        // Load settings from localStorage or backend
+        function loadSettings() {
+            // Here you would typically load settings from your backend
+            // For now, we'll just set some defaults
+            document.getElementById('darkMode').checked = false;
+            document.getElementById('defaultView').value = 'grid';
+            document.getElementById('eventsPerPage').value = 12;
+            document.getElementById('notifications').checked = true;
+            document.getElementById('emailNotifications').checked = false;
+        }
+
+        // Initialize settings
+        loadSettings();
+    </script>
+</body>
+</html> 

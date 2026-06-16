@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventRack - Events</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background: #f0f2f5;
+            min-height: 100vh;
+        }
+
+        .navbar {
+            background: #1a1a2e;
+            padding: 1rem 2rem;
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .navbar h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .navbar-right {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .user-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background: #667eea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 500;
+        }
+
+        .logout-btn {
+            padding: 0.5rem 1rem;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: #c82333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+
+        .filters {
+            background: white;
+            padding: 1rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-group {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .filter-group input,
+        .filter-group select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 0.9rem;
+        }
+
+        .events-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .event-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .event-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .event-image {
+            width: 100%;
+            height: 200px;
+            background: #667eea;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2rem;
+        }
+
+        .event-content {
+            padding: 1.5rem;
+        }
+
+        .event-date {
+            color: #667eea;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .event-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #1a1a2e;
+        }
+
+        .event-location {
+            color: #666;
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .event-description {
+            color: #666;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 1rem;
+        }
+
+        .event-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: background 0.3s ease;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5a6fd6;
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #1a1a2e;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .no-events {
+            text-align: center;
+            padding: 3rem;
+            color: #666;
+        }
+
+        @media (max-width: 768px) {
+            .events-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .event-details-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        .detail-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+        .detail-item i {
+            color: #667eea;
+            margin-top: 0.25rem;
+        }
+        .detail-item h3 {
+            color: #1a1a2e;
+            margin-bottom: 0.5rem;
+        }
+        #eventDetailsRegistrations {
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <h1>EventRack</h1>
+        <div class="navbar-right">
+            <div class="user-info">
+                <div class="user-avatar" id="userAvatar">U</div>
+                <span id="username">User</span>
+            </div>
+            <button class="logout-btn" onclick="handleLogout()">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="filters">
+            <div class="filter-group">
+                <label>Search Events</label>
+                <input type="text" id="searchInput" placeholder="Search by name or location...">
+            </div>
+            <div class="filter-group">
+                <label>Date Range</label>
+                <input type="date" id="dateFilter">
+            </div>
+            <div class="filter-group">
+                <label>Sort By</label>
+                <select id="sortFilter">
+                    <option value="date_asc">Date (Earliest First)</option>
+                    <option value="date_desc">Date (Latest First)</option>
+                    <option value="name_asc">Name (A-Z)</option>
+                    <option value="name_desc">Name (Z-A)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="events-grid" id="eventsGrid">
+            <!-- Events will be dynamically added here -->
+        </div>
+    </div>
+
+    <!-- Edit Event Modal -->
+    <div id="editModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index:1000;">
+        <div style="background:white; padding:2rem; border-radius:12px; max-width:400px; width:100%; position:relative;">
+            <h2>Edit Event</h2>
+            <form id="editEventForm" onsubmit="submitEditEvent(event)">
+                <input type="hidden" id="editEventId">
+                <div class="form-group">
+                    <label for="editEventName">Name</label>
+                    <input type="text" id="editEventName" required>
+                </div>
+                <div class="form-group">
+                    <label for="editEventDate">Date</label>
+                    <input type="date" id="editEventDate" required>
+                </div>
+                <div class="form-group">
+                    <label for="editEventLocation">Location</label>
+                    <input type="text" id="editEventLocation" required>
+                </div>
+                <div class="form-group">
+                    <label for="editEventDescription">Description</label>
+                    <textarea id="editEventDescription" required style="width:100%;height:60px;"></textarea>
+                </div>
+                <div class="error-message" id="editEventError"></div>
+                <button type="submit" class="btn btn-primary">Update</button>
+                <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div id="registerModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index:1000;">
+        <div style="background:white; padding:2rem; border-radius:12px; max-width:400px; width:100%; position:relative;">
+            <h2>Register for Event</h2>
+            <form id="registerEventForm" onsubmit="submitRegisterEvent(event)">
+                <input type="hidden" id="registerEventId">
+                <div class="form-group">
+                    <label for="registerUsername">Username</label>
+                    <input type="text" id="registerUsername" required>
+                </div>
+                <div class="error-message" id="registerEventError"></div>
+                <div class="success-message" id="registerEventSuccess"></div>
+                <button type="submit" class="btn btn-primary">Register</button>
+                <button type="button" class="btn btn-secondary" onclick="closeRegisterModal()">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Event Details Modal -->
+    <div id="eventDetailsModal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.5); justify-content:center; align-items:center; z-index:1000;">
+        <div style="background:white; padding:2rem; border-radius:12px; max-width:600px; width:100%; position:relative;">
+            <button onclick="closeEventDetailsModal()" style="position:absolute; top:1rem; right:1rem; background:none; border:none; font-size:1.5rem; cursor:pointer;">&times;</button>
+            <h2 id="eventDetailsTitle" style="margin-bottom:1.5rem;"></h2>
+            <div class="event-details-content">
+                <div class="detail-item">
+                    <i class="far fa-calendar"></i>
+                    <span id="eventDetailsDate"></span>
+                </div>
+                <div class="detail-item">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span id="eventDetailsLocation"></span>
+                </div>
+                <div class="detail-item" style="margin-top:1rem;">
+                    <h3>Description</h3>
+                    <p id="eventDetailsDescription"></p>
+                </div>
+                <div class="detail-item" style="margin-top:1rem;">
+                    <h3>Registered Users</h3>
+                    <div id="eventDetailsRegistrations" style="margin-top:0.5rem;"></div>
+                </div>
+            </div>
+            <div style="margin-top:2rem; display:flex; gap:1rem; justify-content:flex-end;">
+                <button class="btn btn-secondary" onclick="closeEventDetailsModal()">Close</button>
+                <button class="btn btn-primary" id="registerButton" onclick="registerForEvent()">Register</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Fetch and display events
+        async function fetchEvents() {
+            try {
+                const response = await fetch('/api/events');
+                const events = await response.json();
+                displayEvents(events);
+            } catch (error) {
+                console.error('Error fetching events:', error);
+            }
+        }
+
+        function displayEvents(events) {
+            const eventsGrid = document.getElementById('eventsGrid');
+            if (events.length === 0) {
+                eventsGrid.innerHTML = `
+                    <div class="no-events">
+                        <i class="fas fa-calendar-times fa-3x" style="color: #667eea; margin-bottom: 1rem;"></i>
+                        <h2>No Events Found</h2>
+                        <p>There are no events available at the moment.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            eventsGrid.innerHTML = events.map(event => `
+                <div class="event-card">
+                    <div class="event-image">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <div class="event-content">
+                        <div class="event-date">
+                            <i class="far fa-calendar"></i>
+                            ${new Date(event.date).toLocaleDateString()}
+                        </div>
+                        <h3 class="event-title">${event.name}</h3>
+                        <div class="event-location">
+                            <i class="fas fa-map-marker-alt"></i>
+                            ${event.location}
+                        </div>
+                        <p class="event-description">${event.description}</p>
+                        <div class="event-actions">
+                            <button class="btn btn-primary" onclick="registerForEvent('${event.id}')">
+                                <i class="fas fa-ticket-alt"></i> Register
+                            </button>
+                            <button class="btn btn-secondary" onclick="viewEventDetails('${event.id}')">
+                                <i class="fas fa-info-circle"></i> Details
+                            </button>
+                            <button class="btn btn-primary" onclick="openEditModal(
+                                ${JSON.stringify(event.id)},
+                                ${JSON.stringify(event.name)},
+                                ${JSON.stringify(event.date)},
+                                ${JSON.stringify(event.location)},
+                                ${JSON.stringify(event.description)}
+                            )">
+                                <i class="fas fa-edit"></i> Edit
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Filter and sort events
+        function filterEvents() {
+            const searchQuery = document.getElementById('searchInput').value.toLowerCase();
+            const dateFilter = document.getElementById('dateFilter').value;
+            const sortFilter = document.getElementById('sortFilter').value;
+
+            fetch('/api/events')
+                .then(response => response.json())
+                .then(events => {
+                    let filteredEvents = events.filter(event => {
+                        const matchesSearch = event.name.toLowerCase().includes(searchQuery) ||
+                                           event.location.toLowerCase().includes(searchQuery);
+                        const matchesDate = !dateFilter || event.date.startsWith(dateFilter);
+                        return matchesSearch && matchesDate;
+                    });
+
+                    // Sort events
+                    filteredEvents.sort((a, b) => {
+                        switch (sortFilter) {
+                            case 'date_asc':
+                                return new Date(a.date) - new Date(b.date);
+                            case 'date_desc':
+                                return new Date(b.date) - new Date(a.date);
+                            case 'name_asc':
+                                return a.name.localeCompare(b.name);
+                            case 'name_desc':
+                                return b.name.localeCompare(a.name);
+                            default:
+                                return 0;
+                        }
+                    });
+
+                    displayEvents(filteredEvents);
+                });
+        }
+
+        // Event handlers
+        function handleLogout() {
+            // Implement logout logic
+            window.location.href = '/user';
+        }
+
+        function registerForEvent(eventId) {
+            document.getElementById('registerEventId').value = eventId;
+            document.getElementById('registerUsername').value = '';
+            document.getElementById('registerEventError').style.display = 'none';
+            document.getElementById('registerEventSuccess').style.display = 'none';
+            document.getElementById('registerModal').style.display = 'flex';
+        }
+
+        async function viewEventDetails(eventId) {
+            try {
+                // Fetch event details
+                const eventResponse = await fetch(`/api/events/${eventId}`);
+                const event = await eventResponse.json();
+                
+                // Fetch registrations for this event
+                const regResponse = await fetch(`/api/events/${eventId}/registrations`);
+                const registrations = await regResponse.json();
+                
+                // Update modal content
+                document.getElementById('eventDetailsTitle').textContent = event.name;
+                document.getElementById('eventDetailsDate').textContent = new Date(event.date).toLocaleString();
+                document.getElementById('eventDetailsLocation').textContent = event.location;
+                document.getElementById('eventDetailsDescription').textContent = event.description;
+                
+                // Update registrations list
+                const registrationsList = document.getElementById('eventDetailsRegistrations');
+                if (registrations.length > 0) {
+                    registrationsList.innerHTML = registrations.map(reg => `
+                        <div style="padding:0.5rem; border-bottom:1px solid #eee;">
+                            <i class="fas fa-user"></i> ${reg.username}
+                            <span style="color:#666; font-size:0.9rem; margin-left:0.5rem;">
+                                (${new Date(reg.registered_at).toLocaleString()})
+                            </span>
+                        </div>
+                    `).join('');
+                } else {
+                    registrationsList.innerHTML = '<p style="color:#666;">No registrations yet</p>';
+                }
+                
+                // Show modal
+                document.getElementById('eventDetailsModal').style.display = 'flex';
+                
+                // Store current event ID for registration
+                document.getElementById('registerButton').setAttribute('data-event-id', eventId);
+            } catch (error) {
+                console.error('Error fetching event details:', error);
+                alert('Error loading event details');
+            }
+        }
+
+        function closeEventDetailsModal() {
+            document.getElementById('eventDetailsModal').style.display = 'none';
+        }
+
+        function openEditModal(id, name, date, location, description) {
+            document.getElementById('editModal').style.display = 'flex';
+            document.getElementById('editEventId').value = id;
+            document.getElementById('editEventName').value = name;
+            document.getElementById('editEventDate').value = new Date(date).toISOString().split('T')[0];
+            document.getElementById('editEventLocation').value = location;
+            document.getElementById('editEventDescription').value = description;
+            document.getElementById('editEventError').style.display = 'none';
+        }
+        function closeEditModal() {
+            document.getElementById('editModal').style.display = 'none';
+        }
+        async function submitEditEvent(event) {
+            event.preventDefault();
+            const id = document.getElementById('editEventId').value;
+            const name = document.getElementById('editEventName').value;
+            const date = document.getElementById('editEventDate').value;
+            const location = document.getElementById('editEventLocation').value;
+            const description = document.getElementById('editEventDescription').value;
+            const errorElement = document.getElementById('editEventError');
+            try {
+                const response = await fetch(`/api/events/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, date, location, description })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    closeEditModal();
+                    fetchEvents();
+                } else {
+                    errorElement.textContent = data.error || 'Update failed';
+                    errorElement.style.display = 'block';
+                }
+            } catch (error) {
+                errorElement.textContent = 'An error occurred. Please try again.';
+                errorElement.style.display = 'block';
+            }
+        }
+
+        function closeRegisterModal() {
+            document.getElementById('registerModal').style.display = 'none';
+        }
+        async function submitRegisterEvent(event) {
+            event.preventDefault();
+            const eventId = document.getElementById('registerEventId').value;
+            const username = document.getElementById('registerUsername').value;
+            const errorElement = document.getElementById('registerEventError');
+            const successElement = document.getElementById('registerEventSuccess');
+            errorElement.style.display = 'none';
+            successElement.style.display = 'none';
+            try {
+                const response = await fetch(`/api/events/${eventId}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username })
+                });
+                const data = await response.json();
+                if (data.success) {
+                    successElement.textContent = data.message || 'Registered successfully!';
+                    successElement.style.display = 'block';
+                    errorElement.style.display = 'none';
+                    setTimeout(() => closeRegisterModal(), 2000);
+                } else {
+                    errorElement.textContent = data.error || 'Registration failed';
+                    errorElement.style.display = 'block';
+                }
+            } catch (error) {
+                errorElement.textContent = 'An error occurred. Please try again.';
+                errorElement.style.display = 'block';
+            }
+        }
+
+        // Add event listeners
+        document.getElementById('searchInput').addEventListener('input', filterEvents);
+        document.getElementById('dateFilter').addEventListener('change', filterEvents);
+        document.getElementById('sortFilter').addEventListener('change', filterEvents);
+
+        // Initial load
+        fetchEvents();
+    </script>
+</body>
+</html> 
