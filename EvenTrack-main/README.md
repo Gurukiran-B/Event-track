@@ -28,13 +28,6 @@ EventTrack uses a standard Model-View-Controller (MVC) approach adapted for API-
 2. **Flask API (Controller)**: `even.py` contains all the routing and logic. It handles payload validation, business logic (e.g., checking for duplicates), and error handling.
 3. **Firestore (Model)**: The `firebase-admin` SDK directly communicates with Google Cloud to persist documents in the `events`, `users`, `admins`, and `registrations` collections.
 
-## 📸 Screenshots
-
-| Admin Dashboard | User Portal |
-|:---:|:---:|
-| ![Admin](https://via.placeholder.com/400x250?text=Admin+Dashboard) | ![User](https://via.placeholder.com/400x250?text=User+Portal) |
-*(Add actual screenshots of your application here)*
-
 ## 🚀 Installation Instructions
 
 ### 1. Clone the Repository
