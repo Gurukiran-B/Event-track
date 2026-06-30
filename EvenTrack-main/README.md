@@ -71,9 +71,6 @@ EventTrack uses Firebase Firestore, meaning you must provide a valid Firebase se
 4. Click **Generate new private key** and download the JSON file.
 5. Rename the downloaded file to `firebase-service-account-key.json` and place it in the root directory of this project.
 
-> [!WARNING]
-> **Security Notice**: Your `firebase-service-account-key.json` contains sensitive credentials. This file is already added to the `.gitignore` to prevent it from being pushed to a public repository. **Never commit this file to version control.**
-
 ## 🏃 Running Locally
 
 Once dependencies are installed and the Firebase JSON key is in place, start the development server:
