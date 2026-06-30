@@ -1,7 +1,5 @@
 # 🚀 EventTrack
 
-![EventTrack Banner](https://via.placeholder.com/1200x300?text=EventTrack+Dashboard) *(Placeholder for Banner)*
-
 EventTrack is a modern, lightweight Event Management Dashboard built using **Python Flask** and **Firebase Firestore**. It provides a seamless interface for event organizers to manage events and for users to browse, register, and track the events they plan to attend. 
 
 Designed with simplicity and scale in mind, EventTrack demonstrates how to effectively integrate cloud-native NoSQL databases (Firebase) with a traditional web framework (Flask) to deliver real-time, persistent event tracking without the overhead of complex SQL relational schemas.
