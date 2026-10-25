@@ -3,19 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EventRack Admin</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <title>EventTrack Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
+        :root {
+            --primary: #667eea;
+            --primary-hover: #5a6fd6;
+            --bg-main: #f0f2f5;
+            --sidebar-bg: #1a1a2e;
+            --card-bg: #ffffff;
+            --text-dark: #1a1a2e;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --sidebar-width: 260px;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            font-family: 'Poppins', sans-serif;
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         body {
-            background: #f0f2f5;
+            background: var(--bg-main);
+            color: var(--text-dark);
             min-height: 100vh;
         }
 
@@ -24,145 +40,324 @@
             min-height: 100vh;
         }
 
+        /* ---------------- Sidebar Navigation ---------------- */
         .sidebar {
-            width: 250px;
-            background: #1a1a2e;
-            color: white;
-            padding: 20px;
+            width: var(--sidebar-width);
+            background: var(--sidebar-bg);
+            color: #ffffff;
+            padding: 28px 20px;
             position: fixed;
+            top: 0;
+            left: 0;
             height: 100vh;
+            display: flex;
+            flex-direction: column;
+            z-index: 100;
+            box-shadow: 2px 0 12px rgba(0, 0, 0, 0.15);
+            overflow-y: auto;
         }
 
-        .sidebar h2 {
-            margin-bottom: 30px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding-bottom: 24px;
+            margin-bottom: 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .sidebar-brand i {
+            font-size: 1.5rem;
+            color: var(--primary);
+        }
+
+        .sidebar-brand h2 {
+            font-size: 1.35rem;
+            font-weight: 600;
+            color: #ffffff;
+        }
+
+        .nav-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
         }
 
         .nav-item {
-            padding: 12px 15px;
-            margin: 5px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
             border-radius: 8px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
             text-decoration: none;
-            color: white;
-            display: block;
-        }
-
-        .nav-item:hover {
-            background: rgba(255,255,255,0.1);
-        }
-
-        .nav-item.active {
-            background: #667eea;
+            color: #cbd5e1;
+            font-size: 0.95rem;
         }
 
         .nav-item i {
-            margin-right: 10px;
+            font-size: 1.1rem;
+            width: 22px;
+            text-align: center;
+            color: #94a3b8;
+            transition: color 0.2s ease;
         }
 
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+        }
+
+        .nav-item:hover i {
+            color: #ffffff;
+        }
+
+        .nav-item.active {
+            background: var(--primary);
+            color: #ffffff;
+            font-weight: 500;
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.35);
+        }
+
+        .nav-item.active i {
+            color: #ffffff;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .logout-link {
+            color: #f87171;
+        }
+
+        .logout-link i {
+            color: #f87171;
+        }
+
+        .logout-link:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #fca5a5;
+        }
+
+        /* ---------------- Main Content Layout ---------------- */
         .main-content {
-            margin-left: 250px;
-            padding: 30px;
-            width: calc(100% - 250px);
+            margin-left: var(--sidebar-width);
+            padding: 36px 40px;
+            width: calc(100% - var(--sidebar-width));
+            max-width: 1400px;
         }
 
         .header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
+            margin-bottom: 28px;
+            flex-wrap: wrap;
+            gap: 16px;
         }
 
         .header h1 {
-            color: #1a1a2e;
+            color: var(--text-dark);
+            font-size: 1.85rem;
+            font-weight: 600;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        /* Filter Tabs */
+        .filter-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 4px;
+        }
+
+        .filter-tab {
+            padding: 8px 18px;
+            border-radius: 6px 6px 0 0;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.92rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            transition: all 0.2s ease;
+        }
+
+        .filter-tab:hover {
+            color: var(--primary);
+        }
+
+        .filter-tab.active {
+            color: var(--primary);
+            border-bottom: 2px solid var(--primary);
+            margin-bottom: -6px;
+            font-weight: 600;
+        }
+
+        /* ---------------- Tables ---------------- */
+        .table-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
+            width: 100%;
+            margin-bottom: 36px;
+        }
+
+        .table-card-header {
+            padding: 18px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .table-card-header h2 {
+            font-size: 1.25rem;
+            color: var(--text-dark);
+            font-weight: 600;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+            width: 100%;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 14px 20px;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.92rem;
+        }
+
+        th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: #475569;
+            text-transform: uppercase;
+            font-size: 0.78rem;
+            letter-spacing: 0.5px;
+        }
+
+        tr:hover {
+            background: #f8fafc;
+        }
+
+        /* Badges */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.78rem;
+            font-weight: 600;
+        }
+
+        .badge-active {
+            background: #e6ffed;
+            color: #10b981;
+        }
+
+        .badge-expired {
+            background: #fef3c7;
+            color: #b45309;
+        }
+
+        .badge-inactive {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            align-items: center;
         }
 
         .btn {
-            padding: 10px 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 18px;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             font-weight: 500;
-            transition: all 0.3s ease;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
         }
 
         .btn-primary {
-            background: #667eea;
+            background: var(--primary);
             color: white;
         }
 
         .btn-primary:hover {
-            background: #5a6fd6;
+            background: var(--primary-hover);
         }
 
-        .events-table {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
-            width: 100%;
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #334155;
         }
 
-        .users-table {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-            overflow: hidden;
-            width: 100%;
-            margin-top: 40px;
+        .btn-secondary:hover {
+            background: #cbd5e1;
         }
 
-        .users-table h2 {
-            color: #1a1a2e;
-            padding: 20px;
-            margin: 0;
-            border-bottom: 1px solid #eee;
-        }
-
-        .events-table table,
-        .users-table table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .events-table th,
-        .events-table td,
-        .users-table th,
-        .users-table td {
-            padding: 15px;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-
-        .events-table th,
-        .users-table th {
-            background: #f8f9fa;
-            font-weight: 600;
-            color: #1a1a2e;
-        }
-
-        .events-table tr:hover,
-        .users-table tr:hover {
-            background: #f8f9fa;
-        }
-
-        .action-buttons {
-            display: flex;
-            gap: 10px;
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.82rem;
+            border-radius: 6px;
         }
 
         .btn-edit {
-            background: #4CAF50;
+            background: #10b981;
             color: white;
+        }
+
+        .btn-edit:hover {
+            background: #059669;
         }
 
         .btn-delete {
-            background: #dc3545;
+            background: #ef4444;
             color: white;
         }
 
+        .btn-delete:hover {
+            background: #dc2626;
+        }
+
+        .btn-info {
+            background: #0ea5e9;
+            color: white;
+        }
+
+        .btn-info:hover {
+            background: #0284c7;
+        }
+
+        /* ---------------- Modal ---------------- */
         .modal {
             display: none;
             position: fixed;
@@ -170,40 +365,65 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0,0,0,0.5);
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(4px);
             justify-content: center;
             align-items: center;
+            z-index: 1000;
+            padding: 16px;
         }
 
         .modal-content {
             background: white;
-            padding: 30px;
+            padding: 28px;
             border-radius: 12px;
-            width: 90%;
-            max-width: 500px;
+            width: 100%;
+            max-width: 520px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-content h2 {
+            font-size: 1.35rem;
+            margin-bottom: 20px;
+            color: var(--text-dark);
         }
 
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 18px;
         }
 
         .form-group label {
             display: block;
-            margin-bottom: 5px;
-            color: #666;
+            margin-bottom: 6px;
+            color: #475569;
+            font-size: 0.88rem;
+            font-weight: 500;
         }
 
         .form-group input,
-        .form-group textarea {
+        .form-group textarea,
+        .form-group select {
             width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
             border-radius: 6px;
-            font-size: 14px;
+            font-size: 0.92rem;
+            background: #f8fafc;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
         }
 
         .form-group textarea {
-            height: 100px;
+            height: 90px;
             resize: vertical;
         }
 
@@ -211,170 +431,375 @@
             display: flex;
             justify-content: flex-end;
             gap: 10px;
-            margin-top: 20px;
+            margin-top: 24px;
         }
 
-        .btn-cancel {
-            background: #e2e8f0;
-            color: #1a1a2e;
-        }
-
+        /* Notification */
         .notification {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 25px;
-            background: #4CAF50;
+            top: 24px;
+            right: 24px;
+            padding: 14px 24px;
+            background: #10b981;
             color: white;
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
             display: none;
-            z-index: 1000;
-            animation: slideIn 0.3s ease;
+            z-index: 2000;
+            font-size: 0.92rem;
+            font-weight: 500;
         }
 
-        @keyframes slideIn {
-            from {
-                transform: translateX(100%);
-                opacity: 0;
+        .notification.error {
+            background: #ef4444;
+        }
+
+        /* ---------------- Responsive Styles ---------------- */
+        @media (max-width: 992px) {
+            :root {
+                --sidebar-width: 220px;
             }
-            to {
-                transform: translateX(0);
-                opacity: 1;
+            .main-content {
+                padding: 28px 20px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                position: relative;
+                width: 100%;
+                height: auto;
+                padding: 16px 20px;
+            }
+
+            .sidebar-brand {
+                padding-bottom: 12px;
+                margin-bottom: 12px;
+            }
+
+            .nav-menu {
+                flex-direction: row;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+
+            .nav-item {
+                padding: 8px 14px;
+                font-size: 0.88rem;
+            }
+
+            .sidebar-footer {
+                margin-top: 12px;
+                padding-top: 12px;
+            }
+
+            .main-content {
+                margin-left: 0;
+                width: 100%;
+                padding: 24px 16px;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
             }
         }
     </style>
 </head>
 <body>
     <div class="dashboard">
-        <div class="sidebar">
-            <h2>EventRack</h2>
-            <a href="/admin" class="nav-item active">
-                <i class="fas fa-calendar-alt"></i> Events
-            </a>
-            <a href="/users" class="nav-item">
-                <i class="fas fa-users"></i> Users
-            </a>
-            <a href="/settings" class="nav-item">
-                <i class="fas fa-cog"></i> Settings
-            </a>
-        </div>
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <i class="fas fa-calendar-check"></i>
+                <h2>EventTrack</h2>
+            </div>
+            <nav class="nav-menu" aria-label="Admin Navigation">
+                <a href="/admin" class="nav-item active" aria-current="page">
+                    <i class="fas fa-calendar-alt"></i>
+                    <span>Events</span>
+                </a>
+                <a href="/users" class="nav-item">
+                    <i class="fas fa-users"></i>
+                    <span>Users</span>
+                </a>
+                <a href="/settings" class="nav-item">
+                    <i class="fas fa-cog"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <a href="/logout" class="nav-item logout-link" onclick="handleLogout(event)">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </div>
+        </aside>
 
-        <div class="main-content">
-            <div class="header">
-                <h1>Event Management</h1>
-                <div style="display: flex; gap: 1rem;">
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
+                <div>
+                    <h1>Event Management</h1>
+                    <p style="color: var(--text-muted); font-size: 0.95rem;">Manage upcoming events, archives, and participant registrations</p>
+                </div>
+                <div class="header-actions">
                     <button class="btn btn-primary" onclick="openAddEventModal()">
-                        <i class="fas fa-plus"></i> Add New Event
+                        <i class="fas fa-plus"></i> Add Event
                     </button>
                     <button class="btn btn-secondary" onclick="fetchUsers()">
                         <i class="fas fa-sync"></i> Refresh Users
                     </button>
                 </div>
+            </header>
+
+            <!-- Events Section -->
+            <div class="filter-tabs" role="tablist">
+                <button class="filter-tab active" id="tabActive" onclick="setEventFilter('active')">
+                    <i class="fas fa-clock"></i> Active Events
+                </button>
+                <button class="filter-tab" id="tabArchived" onclick="setEventFilter('archived')">
+                    <i class="fas fa-archive"></i> Past / Archived Events
+                </button>
             </div>
 
-            <div class="events-table">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Event Name</th>
-                            <th>Date</th>
-                            <th>Location</th>
-                            <th>Description</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="eventsTableBody">
-                        <!-- Events will be dynamically added here -->
-                    </tbody>
-                </table>
-            </div>
+            <section class="table-card">
+                <div class="table-card-header">
+                    <h2 id="eventsTableTitle">Active Events</h2>
+                    <span id="eventsCount" style="color: var(--text-muted); font-size: 0.88rem;">0 events</span>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Status</th>
+                                <th>Event Name</th>
+                                <th>Date & Time</th>
+                                <th>Location</th>
+                                <th>Description</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="eventsTableBody">
+                            <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading events...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
 
-            <div class="users-table">
-                <h2>Registered Users</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Username</th>
-                            <th>Email</th>
-                            <th>Role</th>
-                            <th>Status</th>
-                            <th>Last Login</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="usersTableBody">
-                        <!-- Users will be dynamically added here -->
-                    </tbody>
-                </table>
-            </div>
-        </div>
+            <!-- Users Section -->
+            <section class="table-card">
+                <div class="table-card-header">
+                    <h2>Registered Users</h2>
+                    <span id="usersCount" style="color: var(--text-muted); font-size: 0.88rem;">0 users</span>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Username</th>
+                                <th>Email</th>
+                                <th>Role</th>
+                                <th>Status</th>
+                                <th>Last Login</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading users...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
     </div>
 
     <!-- Add/Edit Event Modal -->
-    <div class="modal" id="eventModal">
+    <div class="modal" id="eventModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
         <div class="modal-content">
             <h2 id="modalTitle">Add New Event</h2>
             <form id="eventForm" onsubmit="saveEvent(event)">
                 <input type="hidden" id="eventId">
                 <div class="form-group">
-                    <label for="eventName">Event Name</label>
-                    <input type="text" id="eventName" required>
+                    <label for="eventName">Event Name *</label>
+                    <input type="text" id="eventName" required placeholder="e.g. Annual Tech Symposium">
                 </div>
                 <div class="form-group">
-                    <label for="eventDate">Date</label>
+                    <label for="eventDate">Date & Time *</label>
                     <input type="datetime-local" id="eventDate" required>
                 </div>
                 <div class="form-group">
-                    <label for="eventLocation">Location</label>
-                    <input type="text" id="eventLocation" required>
+                    <label for="eventLocation">Location *</label>
+                    <input type="text" id="eventLocation" required placeholder="e.g. Auditorium / Online">
                 </div>
                 <div class="form-group">
-                    <label for="eventDescription">Description</label>
-                    <textarea id="eventDescription" required></textarea>
+                    <label for="eventDescription">Description *</label>
+                    <textarea id="eventDescription" required placeholder="Brief description of the event..."></textarea>
                 </div>
                 <div class="modal-actions">
-                    <button type="button" class="btn btn-cancel" onclick="closeEventModal()">Cancel</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEventModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary">Save Event</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <div class="notification" id="notification">Event saved successfully!</div>
+    <!-- Edit User Modal -->
+    <div class="modal" id="userModal" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
+        <div class="modal-content">
+            <h2 id="userModalTitle">Edit User</h2>
+            <form id="userForm" onsubmit="saveUser(event)">
+                <input type="hidden" id="editUserId">
+                <div class="form-group">
+                    <label for="editUsername">Username</label>
+                    <input type="text" id="editUsername" required readonly style="background: #f1f5f9;">
+                </div>
+                <div class="form-group">
+                    <label for="editEmail">Email Address *</label>
+                    <input type="email" id="editEmail" required>
+                </div>
+                <div class="form-group">
+                    <label for="editRole">Role</label>
+                    <select id="editRole" required>
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="editStatus">Status</label>
+                    <select id="editStatus" required>
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                    </select>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeUserModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Update User</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Event Registrations Modal -->
+    <div class="modal" id="registrationsModal" role="dialog" aria-modal="true" aria-labelledby="registrationsModalTitle">
+        <div class="modal-content" style="max-width: 600px;">
+            <h2 id="registrationsModalTitle">Event Registrations</h2>
+            <div id="registrationsList" style="max-height: 350px; overflow-y: auto; margin: 16px 0;">
+                <p style="color: var(--text-muted);">Loading registrations...</p>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="closeRegistrationsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="notification" id="notification" role="status" aria-live="polite"></div>
 
     <script>
-        // Fetch and display events
+        let currentFilter = 'active'; // 'active' or 'archived'
+        let allFetchedEvents = [];
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        function showNotification(message, isError = false) {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = 'notification' + (isError ? ' error' : '');
+            notification.style.display = 'block';
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3500);
+        }
+
+        function setEventFilter(filter) {
+            currentFilter = filter;
+            document.getElementById('tabActive').classList.toggle('active', filter === 'active');
+            document.getElementById('tabArchived').classList.toggle('active', filter === 'archived');
+            document.getElementById('eventsTableTitle').textContent = filter === 'active' ? 'Active Events' : 'Past / Archived Events';
+            fetchEvents();
+        }
+
+        // Fetch events with backend expiry support
         async function fetchEvents() {
             try {
-                const response = await fetch('/api/events');
+                // If archived filter selected, request include_expired=true
+                const url = currentFilter === 'archived' ? '/api/events?include_expired=true' : '/api/events';
+                const response = await fetch(url);
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return;
+                }
                 const events = await response.json();
-                displayEvents(events);
+                allFetchedEvents = events;
+
+                // When in archived tab, show only expired ones
+                const displayList = currentFilter === 'archived'
+                    ? events.filter(e => e.expired === true)
+                    : events.filter(e => e.expired !== true);
+
+                displayEvents(displayList);
             } catch (error) {
                 console.error('Error fetching events:', error);
+                showNotification('Error loading events', true);
             }
         }
 
         function displayEvents(events) {
             const tbody = document.getElementById('eventsTableBody');
-            tbody.innerHTML = events.map(event => `
-                <tr>
-                    <td>${event.name}</td>
-                    <td>${new Date(event.date).toLocaleString()}</td>
-                    <td>${event.location}</td>
-                    <td>${event.description}</td>
-                    <td>
-                        <div class="action-buttons">
-                            <button class="btn btn-edit" onclick="editEvent('${event.id}')">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <button class="btn btn-delete" onclick="deleteEvent('${event.id}')">
-                                <i class="fas fa-trash"></i>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
+            document.getElementById('eventsCount').textContent = `${events.length} event${events.length === 1 ? '' : 's'}`;
+
+            if (!events || events.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 24px;">No ${currentFilter} events found.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = events.map(event => {
+                const isPast = event.expired === true;
+                const badge = isPast
+                    ? `<span class="status-badge badge-expired"><i class="fas fa-history"></i> Ended</span>`
+                    : `<span class="status-badge badge-active"><i class="fas fa-check-circle"></i> Active</span>`;
+
+                let dateDisplay = 'N/A';
+                if (event.date) {
+                    const parsed = new Date(event.date);
+                    dateDisplay = isNaN(parsed.getTime()) ? escapeHtml(event.date) : parsed.toLocaleString();
+                }
+
+                return `
+                    <tr>
+                        <td>${badge}</td>
+                        <td><strong>${escapeHtml(event.name)}</strong></td>
+                        <td>${dateDisplay}</td>
+                        <td>${escapeHtml(event.location)}</td>
+                        <td>${escapeHtml(event.description)}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn btn-sm btn-info" title="View Registrations" onclick="viewRegistrations('${escapeHtml(event.id)}', '${escapeHtml(event.name)}')">
+                                    <i class="fas fa-users"></i>
+                                </button>
+                                <button class="btn btn-sm btn-edit" title="Edit Event" onclick="editEvent('${escapeHtml(event.id)}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-delete" title="Delete Event" onclick="deleteEvent('${escapeHtml(event.id)}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
         }
 
         function openAddEventModal() {
@@ -388,188 +813,274 @@
             document.getElementById('eventModal').style.display = 'none';
         }
 
-       async function editEvent(eventId) {
-    try {
-        const response = await fetch(`/api/events/${eventId}`);
-        if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-        
-        const event = await response.json();
-        console.log('Event Data:', event); // Debugging
+        async function editEvent(eventId) {
+            try {
+                const response = await fetch(`/api/events/${eventId}`);
+                if (!response.ok) throw new Error('Failed to fetch event');
+                const event = await response.json();
 
-        document.getElementById('modalTitle').textContent = 'Edit Event';
-        document.getElementById('eventId').value = eventId;
-        document.getElementById('eventName').value = event.name;
+                document.getElementById('modalTitle').textContent = 'Edit Event';
+                document.getElementById('eventId').value = event.id;
+                document.getElementById('eventName').value = event.name || '';
+                document.getElementById('eventLocation').value = event.location || '';
+                document.getElementById('eventDescription').value = event.description || '';
 
-        // Validate and format date
-        if (event.date) {
-            const eventDate = new Date(event.date);
-            if (!isNaN(eventDate.getTime())) {
-                const formattedDate = eventDate.toISOString().slice(0, 16);
-                document.getElementById('eventDate').value = formattedDate;
-            } else {
-                console.error('Invalid date format:', event.date);
-                showNotification('Invalid date format received', 'error');
-            }
-        }
-
-        document.getElementById('eventLocation').value = event.location;
-        document.getElementById('eventDescription').value = event.description;
-        document.getElementById('eventModal').style.display = 'flex';
-
-    } catch (error) {
-        console.error('Error fetching event:', error);
-        showNotification('Error loading event details', 'error');
-    }
-}
-
-        async function deleteEvent(eventId) {
-            if (confirm('Are you sure you want to delete this event?')) {
-                try {
-                    const response = await fetch(`/api/events/${eventId}`, {
-                        method: 'DELETE'
-                    });
-                    const data = await response.json();
-                    if (data.success) {
-                        showNotification('Event deleted successfully!');
-                        fetchEvents();
+                if (event.date) {
+                    const dt = new Date(event.date);
+                    if (!isNaN(dt.getTime())) {
+                        // Format for datetime-local input YYYY-MM-DDThh:mm
+                        const pad = (n) => String(n).padStart(2, '0');
+                        const localIso = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+                        document.getElementById('eventDate').value = localIso;
                     }
-                } catch (error) {
-                    console.error('Error deleting event:', error);
                 }
+
+                document.getElementById('eventModal').style.display = 'flex';
+            } catch (err) {
+                console.error('Error opening edit modal:', err);
+                showNotification('Error loading event details', true);
             }
         }
 
-        async function saveEvent(event) {
-            event.preventDefault();
+        async function saveEvent(e) {
+            e.preventDefault();
             const eventId = document.getElementById('eventId').value;
-            const eventData = {
-                name: document.getElementById('eventName').value,
+            const payload = {
+                name: document.getElementById('eventName').value.trim(),
                 date: document.getElementById('eventDate').value,
-                location: document.getElementById('eventLocation').value,
-                description: document.getElementById('eventDescription').value
+                location: document.getElementById('eventLocation').value.trim(),
+                description: document.getElementById('eventDescription').value.trim()
             };
 
+            const url = eventId ? `/api/events/${eventId}` : '/api/events';
+            const method = eventId ? 'PUT' : 'POST';
+
             try {
-                const url = eventId ? `/api/events/${eventId}` : '/api/events';
-                const method = eventId ? 'PUT' : 'POST';
-                
                 const response = await fetch(url, {
                     method: method,
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(eventData)
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
                 });
+
+                if (response.status === 401) {
+                    showNotification('Session expired. Please log in.', true);
+                    setTimeout(() => { window.location.href = '/'; }, 1500);
+                    return;
+                }
 
                 const data = await response.json();
                 if (data.success) {
-                    showNotification('Event saved successfully!');
+                    showNotification(eventId ? 'Event updated successfully!' : 'Event created successfully!');
                     closeEventModal();
                     fetchEvents();
                 } else {
-                    showNotification(data.error || 'Failed to save event', 'error');
+                    showNotification(data.error || 'Failed to save event', true);
                 }
-            } catch (error) {
-                console.error('Error saving event:', error);
-                showNotification('An error occurred while saving the event', 'error');
+            } catch (err) {
+                console.error('Error saving event:', err);
+                showNotification('Network error while saving event', true);
             }
         }
 
-        function showNotification(message, type = 'success') {
-            const notification = document.getElementById('notification');
-            notification.textContent = message;
-            notification.style.display = 'block';
-            notification.style.backgroundColor = type === 'error' ? '#f44336' : '#4CAF50';
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 3000);
-        }
-
-        // Fetch and display users
-       async function fetchUsers() {
-    try {
-        const response = await fetch('/api/users');
-        const data = await response.json();
-        if (data.success && Array.isArray(data.users)) {
-            displayUsers(data.users);
-        } else {
-            console.error('Invalid users data:', data);
-            showNotification(data.error || 'Error loading users', 'error');
-        }
-    } catch (error) {
-        console.error('Error fetching users:', error);
-        showNotification('Error loading users', 'error');
-    }
-}
-
-function displayUsers(users) {
-    const tbody = document.getElementById('usersTableBody');
-    if (!tbody) {
-        console.error('Users table body not found');
-        return;
-    }
-
-    if (!users || users.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No users found</td></tr>';
-        return;
-    }
-
-    tbody.innerHTML = users.map(user => {
-        let lastLoginFormatted = 'Never';
-        if (user.lastLogin) {
-            if (user.lastLogin.seconds) {
-                // If lastLogin is a Firestore Timestamp object
-                lastLoginFormatted = new Date(user.lastLogin.seconds * 1000).toLocaleString();
-            } else {
-                // If lastLogin is a regular Date string
-                lastLoginFormatted = new Date(user.lastLogin).toLocaleString();
+        async function deleteEvent(eventId) {
+            if (!confirm('Are you sure you want to delete this event? This action cannot be undone.')) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/events/${eventId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('Event deleted successfully!');
+                    fetchEvents();
+                } else {
+                    showNotification(data.error || 'Failed to delete event', true);
+                }
+            } catch (err) {
+                console.error('Error deleting event:', err);
+                showNotification('Error deleting event', true);
             }
         }
 
-        return `
-            <tr>
-                <td>${user.username || 'N/A'}</td>
-                <td>${user.email || 'N/A'}</td>
-                <td>${user.role || 'user'}</td>
-                <td>${user.status || 'active'}</td>
-                <td>${lastLoginFormatted}</td>
-                <td>
-                    <div class="action-buttons">
-                        <button class="btn btn-edit" onclick="editUser('${user.id}')">
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <button class="btn btn-delete" onclick="deleteUser('${user.id}')">
-                            <i class="fas fa-trash"></i>
-                        </button>
+        // View event registrations
+        async function viewRegistrations(eventId, eventName) {
+            const modal = document.getElementById('registrationsModal');
+            document.getElementById('registrationsModalTitle').textContent = `Attendees for "${eventName}"`;
+            const listEl = document.getElementById('registrationsList');
+            listEl.innerHTML = '<p style="color: var(--text-muted);">Fetching attendees...</p>';
+            modal.style.display = 'flex';
+
+            try {
+                const response = await fetch(`/api/events/${eventId}/registrations`);
+                const regs = await response.json();
+                if (!regs || regs.length === 0) {
+                    listEl.innerHTML = '<p style="color: var(--text-muted); padding: 12px 0;">No participants have registered for this event yet.</p>';
+                    return;
+                }
+
+                listEl.innerHTML = `
+                    <div style="margin-bottom: 12px; font-weight: 600; color: var(--primary);">
+                        Total Registrations: ${regs.length}
                     </div>
-                </td>
-            </tr>
-        `;
-    }).join('');
-}
-
-async function deleteUser(userId) {
-    if (confirm('Are you sure you want to delete this user?')) {
-        try {
-            const response = await fetch(`/api/users/${userId}`, {
-                method: 'DELETE'
-            });
-            const data = await response.json();
-            if (data.success) {
-                showNotification('User deleted successfully!');
-                fetchUsers();
-            } else {
-                showNotification(data.error || 'Failed to delete user', 'error');
+                    <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px;">
+                        ${regs.map(r => `
+                            <li style="padding: 10px 14px; background: #f8fafc; border-radius: 6px; border: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+                                <span><i class="fas fa-user" style="color: var(--primary); margin-right: 8px;"></i><strong>${escapeHtml(r.username)}</strong></span>
+                                <span style="font-size: 0.85rem; color: var(--text-muted);">${r.registered_at ? new Date(r.registered_at).toLocaleString() : ''}</span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                `;
+            } catch (err) {
+                listEl.innerHTML = '<p style="color: var(--danger);">Failed to load registrations.</p>';
             }
-        } catch (error) {
-            console.error('Error deleting user:', error);
-            showNotification('An error occurred while deleting the user', 'error');
         }
-    }
-}
+
+        function closeRegistrationsModal() {
+            document.getElementById('registrationsModal').style.display = 'none';
+        }
+
+        // ---------------- Users Management ----------------
+        async function fetchUsers() {
+            try {
+                const response = await fetch('/api/users');
+                if (response.status === 401) {
+                    window.location.href = '/';
+                    return;
+                }
+                const data = await response.json();
+                if (data.success && Array.isArray(data.users)) {
+                    displayUsers(data.users);
+                } else {
+                    showNotification(data.error || 'Failed to fetch users', true);
+                }
+            } catch (err) {
+                console.error('Error fetching users:', err);
+                showNotification('Error loading users', true);
+            }
+        }
+
+        function displayUsers(users) {
+            const tbody = document.getElementById('usersTableBody');
+            document.getElementById('usersCount').textContent = `${users.length} user${users.length === 1 ? '' : 's'}`;
+
+            if (!users || users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 20px;">No users found.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = users.map(user => {
+                let lastLoginDisplay = 'Never';
+                if (user.lastLogin) {
+                    const parsed = new Date(user.lastLogin);
+                    lastLoginDisplay = isNaN(parsed.getTime()) ? escapeHtml(user.lastLogin) : parsed.toLocaleString();
+                }
+
+                const statusBadge = user.status === 'active'
+                    ? '<span class="status-badge badge-active">Active</span>'
+                    : '<span class="status-badge badge-inactive">Inactive</span>';
+
+                return `
+                    <tr>
+                        <td><strong>${escapeHtml(user.username || 'N/A')}</strong></td>
+                        <td>${escapeHtml(user.email || 'N/A')}</td>
+                        <td><span style="text-transform: capitalize;">${escapeHtml(user.role || 'user')}</span></td>
+                        <td>${statusBadge}</td>
+                        <td style="font-size: 0.85rem; color: var(--text-muted);">${lastLoginDisplay}</td>
+                        <td>
+                            <div class="action-buttons">
+                                <button class="btn btn-sm btn-edit" title="Edit User" onclick="editUser('${escapeHtml(user.id)}', '${escapeHtml(user.username)}', '${escapeHtml(user.email)}', '${escapeHtml(user.role)}', '${escapeHtml(user.status)}')">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-sm btn-delete" title="Delete User" onclick="deleteUser('${escapeHtml(user.id)}')">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Implementation of missing editUser function
+        function editUser(userId, username, email, role, status) {
+            document.getElementById('editUserId').value = userId;
+            document.getElementById('editUsername').value = username || '';
+            document.getElementById('editEmail').value = email || '';
+            document.getElementById('editRole').value = role || 'user';
+            document.getElementById('editStatus').value = status || 'active';
+            document.getElementById('userModal').style.display = 'flex';
+        }
+
+        function closeUserModal() {
+            document.getElementById('userModal').style.display = 'none';
+        }
+
+        async function saveUser(e) {
+            e.preventDefault();
+            const userId = document.getElementById('editUserId').value;
+            const payload = {
+                username: document.getElementById('editUsername').value.trim(),
+                email: document.getElementById('editEmail').value.trim(),
+                role: document.getElementById('editRole').value,
+                status: document.getElementById('editStatus').value
+            };
+
+            try {
+                const response = await fetch(`/api/users/${userId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('User updated successfully!');
+                    closeUserModal();
+                    fetchUsers();
+                } else {
+                    showNotification(data.error || 'Failed to update user', true);
+                }
+            } catch (err) {
+                console.error('Error updating user:', err);
+                showNotification('Network error updating user', true);
+            }
+        }
+
+        async function deleteUser(userId) {
+            if (!confirm('Are you sure you want to delete this user?')) return;
+            try {
+                const response = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('User deleted successfully!');
+                    fetchUsers();
+                } else {
+                    showNotification(data.error || 'Failed to delete user', true);
+                }
+            } catch (err) {
+                console.error('Error deleting user:', err);
+                showNotification('Error deleting user', true);
+            }
+        }
+
+        async function handleLogout(e) {
+            e.preventDefault();
+            try {
+                await fetch('/logout', { method: 'POST' });
+            } finally {
+                window.location.href = '/';
+            }
+        }
+
+        // Close modals on clicking backdrop
+        window.addEventListener('click', (e) => {
+            if (e.target.classList.contains('modal')) {
+                e.target.style.display = 'none';
+            }
+        });
+
         // Initial load
         fetchEvents();
         fetchUsers();
     </script>
 </body>
-</html> 
+</html>

@@ -1,0 +1,25 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments & virtualenvs
+.venv/
+venv/
+env/
+ENV/
+
+# Pytest & test caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local secrets and credentials
+firebase-service-account-key*.json
+.env*
+.env
+
+# Flask & SQLite instance
+instance/
+*.log
+*.sqlite3
