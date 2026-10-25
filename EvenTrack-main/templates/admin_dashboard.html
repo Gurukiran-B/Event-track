@@ -2,6 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        (() => {
+            const token = document.querySelector('meta[name="csrf-token"]').content;
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (input, init = {}) => {
+                const request = input instanceof Request ? input : null;
+                const method = (init.method || (request && request.method) || 'GET').toUpperCase();
+                const url = new URL(request ? request.url : input, window.location.href);
+                if (url.origin !== window.location.origin || !['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+                    return originalFetch(input, init);
+                }
+                const headers = new Headers(init.headers || (request && request.headers) || {});
+                headers.set('X-CSRF-Token', token);
+                return originalFetch(input, { ...init, headers });
+            };
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EventTrack Admin Dashboard</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -590,6 +608,9 @@
                     </table>
                 </div>
             </section>
+            <div style="text-align: center; margin: 16px 0;">
+                <button class="btn btn-secondary" id="loadMoreEvents" onclick="fetchEvents(true)" hidden>Load more events</button>
+            </div>
 
             <!-- Users Section -->
             <section class="table-card">
@@ -613,6 +634,9 @@
                             <tr><td colspan="6" style="text-align: center; color: var(--text-muted);">Loading users...</td></tr>
                         </tbody>
                     </table>
+                </div>
+                <div style="text-align: center; padding: 16px;">
+                    <button class="btn btn-secondary" id="loadMoreUsers" onclick="fetchUsers(usersCursor, true)" hidden>Load more users</button>
                 </div>
             </section>
         </main>
@@ -691,6 +715,9 @@
             <div id="registrationsList" style="max-height: 350px; overflow-y: auto; margin: 16px 0;">
                 <p style="color: var(--text-muted);">Loading registrations...</p>
             </div>
+            <div style="text-align: center; padding: 8px;">
+                <button type="button" class="btn btn-secondary" id="loadMoreRegistrations" onclick="fetchRegistrations(true)" hidden>Load more registrations</button>
+            </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" onclick="closeRegistrationsModal()">Close</button>
             </div>
@@ -702,6 +729,14 @@
     <script>
         let currentFilter = 'active'; // 'active' or 'archived'
         let allFetchedEvents = [];
+        let eventCursor = null;
+        let eventHasMore = false;
+        let usersCursor = null;
+        let usersHasMore = false;
+        let currentUsers = [];
+        let currentRegistrationEventId = null;
+        let currentRegistrationCursor = null;
+        let currentRegistrations = [];
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -725,6 +760,8 @@
 
         function setEventFilter(filter) {
             currentFilter = filter;
+            allFetchedEvents = [];
+            eventCursor = null;
             document.getElementById('tabActive').classList.toggle('active', filter === 'active');
             document.getElementById('tabArchived').classList.toggle('active', filter === 'archived');
             document.getElementById('eventsTableTitle').textContent = filter === 'active' ? 'Active Events' : 'Past / Archived Events';
@@ -732,24 +769,33 @@
         }
 
         // Fetch events with backend expiry support
-        async function fetchEvents() {
+        async function fetchEvents(append = false) {
             try {
-                // If archived filter selected, request include_expired=true
-                const url = currentFilter === 'archived' ? '/api/events?include_expired=true' : '/api/events';
+                if (!append) {
+                    allFetchedEvents = [];
+                    eventCursor = null;
+                }
+                const params = new URLSearchParams();
+                if (currentFilter === 'archived') params.set('include_expired', 'true');
+                if (eventCursor) params.set('cursor', eventCursor);
+                const url = `/api/events?${params.toString()}`;
                 const response = await fetch(url);
                 if (response.status === 401) {
                     window.location.href = '/';
                     return;
                 }
-                const events = await response.json();
-                allFetchedEvents = events;
+                if (!response.ok) throw new Error('Failed to fetch events');
+                const data = await response.json();
+                allFetchedEvents = allFetchedEvents.concat(data.events || []);
+                eventCursor = data.next_cursor;
+                eventHasMore = Boolean(eventCursor);
 
-                // When in archived tab, show only expired ones
                 const displayList = currentFilter === 'archived'
-                    ? events.filter(e => e.expired === true)
-                    : events.filter(e => e.expired !== true);
+                    ? allFetchedEvents.filter(e => e.expired === true)
+                    : allFetchedEvents.filter(e => e.expired !== true);
 
                 displayEvents(displayList);
+                document.getElementById('loadMoreEvents').hidden = !eventHasMore;
             } catch (error) {
                 console.error('Error fetching events:', error);
                 showNotification('Error loading events', true);
@@ -786,13 +832,13 @@
                         <td>${escapeHtml(event.description)}</td>
                         <td>
                             <div class="action-buttons">
-                                <button class="btn btn-sm btn-info" title="View Registrations" onclick="viewRegistrations('${escapeHtml(event.id)}', '${escapeHtml(event.name)}')">
+                                <button class="btn btn-sm btn-info" title="View Registrations" data-event-action="registrations" data-event-id="${escapeHtml(event.id)}" data-event-name="${escapeHtml(event.name)}">
                                     <i class="fas fa-users"></i>
                                 </button>
-                                <button class="btn btn-sm btn-edit" title="Edit Event" onclick="editEvent('${escapeHtml(event.id)}')">
+                                <button class="btn btn-sm btn-edit" title="Edit Event" data-event-action="edit" data-event-id="${escapeHtml(event.id)}">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button class="btn btn-sm btn-delete" title="Delete Event" onclick="deleteEvent('${escapeHtml(event.id)}')">
+                                <button class="btn btn-sm btn-delete" title="Delete Event" data-event-action="delete" data-event-id="${escapeHtml(event.id)}">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -800,6 +846,18 @@
                     </tr>
                 `;
             }).join('');
+
+            tbody.querySelectorAll('[data-event-action="registrations"]').forEach(button => {
+                button.addEventListener('click', () => {
+                    viewRegistrations(button.dataset.eventId, button.dataset.eventName);
+                });
+            });
+            tbody.querySelectorAll('[data-event-action="edit"]').forEach(button => {
+                button.addEventListener('click', () => editEvent(button.dataset.eventId));
+            });
+            tbody.querySelectorAll('[data-event-action="delete"]').forEach(button => {
+                button.addEventListener('click', () => deleteEvent(button.dataset.eventId));
+            });
         }
 
         function openAddEventModal() {
@@ -907,29 +965,48 @@
             document.getElementById('registrationsModalTitle').textContent = `Attendees for "${eventName}"`;
             const listEl = document.getElementById('registrationsList');
             listEl.innerHTML = '<p style="color: var(--text-muted);">Fetching attendees...</p>';
+            currentRegistrationEventId = eventId;
+            currentRegistrationCursor = null;
+            currentRegistrations = [];
             modal.style.display = 'flex';
+            await fetchRegistrations(false);
+        }
+
+        async function fetchRegistrations(append) {
+            const listEl = document.getElementById('registrationsList');
+            if (!append) {
+                currentRegistrationCursor = null;
+                currentRegistrations = [];
+            }
+            const params = new URLSearchParams();
+            if (currentRegistrationCursor) params.set('cursor', currentRegistrationCursor);
+            const query = params.toString();
+            const endpoint = `/api/events/${currentRegistrationEventId}/registrations${query ? `?${query}` : ''}`;
 
             try {
-                const response = await fetch(`/api/events/${eventId}/registrations`);
-                const regs = await response.json();
-                if (!regs || regs.length === 0) {
+                const response = await fetch(endpoint);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Failed to load registrations');
+                currentRegistrations = currentRegistrations.concat(data.registrations || []);
+                currentRegistrationCursor = data.next_cursor;
+                if (!currentRegistrations.length) {
                     listEl.innerHTML = '<p style="color: var(--text-muted); padding: 12px 0;">No participants have registered for this event yet.</p>';
-                    return;
+                } else {
+                    listEl.innerHTML = `
+                        <div style="margin-bottom: 12px; font-weight: 600; color: var(--primary);">
+                            Registrations shown: ${currentRegistrations.length}${currentRegistrationCursor ? ' (more available)' : ''}
+                        </div>
+                        <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px;">
+                            ${currentRegistrations.map(r => `
+                                <li style="padding: 10px 14px; background: #f8fafc; border-radius: 6px; border: 1px solid var(--border-color); display: flex; justify-content: space-between;">
+                                    <span><i class="fas fa-user" style="color: var(--primary); margin-right: 8px;"></i><strong>${escapeHtml(r.username)}</strong></span>
+                                    <span style="font-size: 0.85rem; color: var(--text-muted);">${r.registered_at ? new Date(r.registered_at).toLocaleString() : ''}</span>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    `;
                 }
-
-                listEl.innerHTML = `
-                    <div style="margin-bottom: 12px; font-weight: 600; color: var(--primary);">
-                        Total Registrations: ${regs.length}
-                    </div>
-                    <ul style="list-style: none; display: flex; flex-direction: column; gap: 8px;">
-                        ${regs.map(r => `
-                            <li style="padding: 10px 14px; background: #f8fafc; border-radius: 6px; border: 1px solid var(--border-color); display: flex; justify-content: space-between;">
-                                <span><i class="fas fa-user" style="color: var(--primary); margin-right: 8px;"></i><strong>${escapeHtml(r.username)}</strong></span>
-                                <span style="font-size: 0.85rem; color: var(--text-muted);">${r.registered_at ? new Date(r.registered_at).toLocaleString() : ''}</span>
-                            </li>
-                        `).join('')}
-                    </ul>
-                `;
+                document.getElementById('loadMoreRegistrations').hidden = !currentRegistrationCursor;
             } catch (err) {
                 listEl.innerHTML = '<p style="color: var(--danger);">Failed to load registrations.</p>';
             }
@@ -940,16 +1017,28 @@
         }
 
         // ---------------- Users Management ----------------
-        async function fetchUsers() {
+        async function fetchUsers(cursor = null, append = false) {
             try {
-                const response = await fetch('/api/users');
+                if (!append) {
+                    cursor = null;
+                    currentUsers = [];
+                    usersCursor = null;
+                }
+                const params = new URLSearchParams();
+                if (cursor) params.set('cursor', cursor);
+                const query = params.toString();
+                const response = await fetch(`/api/users${query ? `?${query}` : ''}`);
                 if (response.status === 401) {
                     window.location.href = '/';
                     return;
                 }
                 const data = await response.json();
                 if (data.success && Array.isArray(data.users)) {
-                    displayUsers(data.users);
+                    usersCursor = data.next_cursor;
+                    usersHasMore = Boolean(usersCursor);
+                    displayUsers(append ? currentUsers.concat(data.users) : data.users);
+                    currentUsers = append ? currentUsers.concat(data.users) : data.users;
+                    document.getElementById('loadMoreUsers').hidden = !usersHasMore;
                 } else {
                     showNotification(data.error || 'Failed to fetch users', true);
                 }
@@ -988,10 +1077,10 @@
                         <td style="font-size: 0.85rem; color: var(--text-muted);">${lastLoginDisplay}</td>
                         <td>
                             <div class="action-buttons">
-                                <button class="btn btn-sm btn-edit" title="Edit User" onclick="editUser('${escapeHtml(user.id)}', '${escapeHtml(user.username)}', '${escapeHtml(user.email)}', '${escapeHtml(user.role)}', '${escapeHtml(user.status)}')">
+                                <button class="btn btn-sm btn-edit" title="Edit User" data-user-action="edit" data-user-id="${escapeHtml(user.id)}">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button class="btn btn-sm btn-delete" title="Delete User" onclick="deleteUser('${escapeHtml(user.id)}')">
+                                <button class="btn btn-sm btn-delete" title="Delete User" data-user-action="delete" data-user-id="${escapeHtml(user.id)}">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -999,6 +1088,18 @@
                     </tr>
                 `;
             }).join('');
+
+            tbody.querySelectorAll('[data-user-action="edit"]').forEach(button => {
+                button.addEventListener('click', () => {
+                    const user = users.find(item => item.id === button.dataset.userId);
+                    if (user) {
+                        editUser(user.id, user.username, user.email, user.role, user.status);
+                    }
+                });
+            });
+            tbody.querySelectorAll('[data-user-action="delete"]').forEach(button => {
+                button.addEventListener('click', () => deleteUser(button.dataset.userId));
+            });
         }
 
         // Implementation of missing editUser function

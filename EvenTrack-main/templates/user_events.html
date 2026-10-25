@@ -2,6 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        (() => {
+            const token = document.querySelector('meta[name="csrf-token"]').content;
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (input, init = {}) => {
+                const request = input instanceof Request ? input : null;
+                const method = (init.method || (request && request.method) || 'GET').toUpperCase();
+                const url = new URL(request ? request.url : input, window.location.href);
+                if (url.origin !== window.location.origin || !['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+                    return originalFetch(input, init);
+                }
+                const headers = new Headers(init.headers || (request && request.headers) || {});
+                headers.set('X-CSRF-Token', token);
+                return originalFetch(input, { ...init, headers });
+            };
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EventTrack - Discover & Register Events</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -535,6 +553,9 @@
                 <p>Loading events...</p>
             </div>
         </div>
+        <div style="text-align: center; margin: 20px 0;">
+            <button class="btn btn-secondary" id="loadMoreEvents" onclick="fetchEvents(true)" hidden>Load more events</button>
+        </div>
     </div>
 
     <!-- Register Modal -->
@@ -545,10 +566,6 @@
             <form id="registerEventForm" onsubmit="submitRegisterEvent(event)">
                 <input type="hidden" id="registerEventId">
                 <p id="registerEventNotice" style="font-size: 0.9rem; color: #475569; margin-bottom: 1rem;"></p>
-                <div class="form-group">
-                    <label for="registerUsername">Your Username *</label>
-                    <input type="text" id="registerUsername" required placeholder="Enter registered username">
-                </div>
                 <div class="error-message" id="registerEventError"></div>
                 <div class="success-message" id="registerEventSuccess"></div>
                 <div class="modal-footer">
@@ -605,6 +622,7 @@
         let allEvents = [];
         let lifecycleFilter = 'active'; // 'active' or 'all'
         let currentAuthUser = null;
+        let eventsCursor = null;
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -620,10 +638,13 @@
             try {
                 const res = await fetch('/api/auth-status');
                 const data = await res.json();
-                if (data.logged_in && data.username) {
+                if (data.logged_in && data.role === 'user' && data.username) {
                     currentAuthUser = data.username;
                     document.getElementById('usernameDisplay').textContent = data.username;
                     document.getElementById('userAvatar').textContent = data.username.charAt(0).toUpperCase();
+                } else {
+                    document.getElementById('usernameDisplay').textContent = 'Guest';
+                    document.getElementById('userAvatar').textContent = 'G';
                 }
             } catch (err) {
                 console.warn('Could not fetch auth status:', err);
@@ -632,19 +653,31 @@
 
         function setLifecycleFilter(filter) {
             lifecycleFilter = filter;
+            allEvents = [];
+            eventsCursor = null;
             document.getElementById('pillActive').classList.toggle('active', filter === 'active');
             document.getElementById('pillAll').classList.toggle('active', filter === 'all');
             fetchEvents();
         }
 
         // Fetch events from server
-        async function fetchEvents() {
+        async function fetchEvents(append = false) {
             try {
-                // Request include_expired=true when viewing 'all'
-                const url = lifecycleFilter === 'all' ? '/api/events?include_expired=true' : '/api/events';
+                if (!append) {
+                    allEvents = [];
+                    eventsCursor = null;
+                }
+                const params = new URLSearchParams();
+                if (lifecycleFilter === 'all') params.set('include_expired', 'true');
+                if (eventsCursor) params.set('cursor', eventsCursor);
+                const url = `/api/events?${params.toString()}`;
                 const response = await fetch(url);
-                allEvents = await response.json();
+                if (!response.ok) throw new Error('Failed to fetch events');
+                const data = await response.json();
+                allEvents = allEvents.concat(data.events || []);
+                eventsCursor = data.next_cursor;
                 filterAndRender();
+                document.getElementById('loadMoreEvents').hidden = !eventsCursor;
             } catch (error) {
                 console.error('Error fetching events:', error);
                 document.getElementById('eventsGrid').innerHTML = `
@@ -719,7 +752,7 @@
 
                 const actionButton = isExpired
                     ? `<button class="btn btn-disabled" disabled aria-disabled="true"><i class="fas fa-lock"></i> Registration Closed</button>`
-                    : `<button class="btn btn-primary" onclick="openRegisterModal('${escapeHtml(event.id)}', '${escapeHtml(event.name)}')"><i class="fas fa-ticket-alt"></i> Register</button>`;
+                    : `<button class="btn btn-primary" data-event-action="register" data-event-id="${escapeHtml(event.id)}" data-event-name="${escapeHtml(event.name)}"><i class="fas fa-ticket-alt"></i> Register</button>`;
 
                 return `
                     <div class="event-card">
@@ -740,7 +773,7 @@
                             <p class="event-description">${escapeHtml(event.description)}</p>
                             <div class="event-actions">
                                 ${actionButton}
-                                <button class="btn btn-secondary" onclick="viewEventDetails('${escapeHtml(event.id)}')">
+                                <button class="btn btn-secondary" data-event-action="details" data-event-id="${escapeHtml(event.id)}">
                                     <i class="fas fa-info-circle"></i> Details
                                 </button>
                             </div>
@@ -748,13 +781,21 @@
                     </div>
                 `;
             }).join('');
+
+            eventsGrid.querySelectorAll('[data-event-action="register"]').forEach(button => {
+                button.addEventListener('click', () => {
+                    openRegisterModal(button.dataset.eventId, button.dataset.eventName);
+                });
+            });
+            eventsGrid.querySelectorAll('[data-event-action="details"]').forEach(button => {
+                button.addEventListener('click', () => viewEventDetails(button.dataset.eventId));
+            });
         }
 
         // Registration Modal
         function openRegisterModal(eventId, eventName) {
             document.getElementById('registerEventId').value = eventId;
             document.getElementById('registerEventNotice').textContent = `Registering for: ${eventName}`;
-            document.getElementById('registerUsername').value = currentAuthUser || '';
             document.getElementById('registerEventError').style.display = 'none';
             document.getElementById('registerEventSuccess').style.display = 'none';
             document.getElementById('registerModal').style.display = 'flex';
@@ -767,20 +808,24 @@
         async function submitRegisterEvent(e) {
             e.preventDefault();
             const eventId = document.getElementById('registerEventId').value;
-            const username = document.getElementById('registerUsername').value.trim();
             const errorElement = document.getElementById('registerEventError');
             const successElement = document.getElementById('registerEventSuccess');
             const submitBtn = document.getElementById('btnSubmitRegistration');
 
             errorElement.style.display = 'none';
             successElement.style.display = 'none';
+            if (!currentAuthUser) {
+                errorElement.textContent = 'Please log in as a user before registering.';
+                errorElement.style.display = 'block';
+                return;
+            }
             submitBtn.disabled = true;
 
             try {
                 const response = await fetch(`/api/events/${eventId}/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username })
+                    body: JSON.stringify({})
                 });
 
                 const data = await response.json();
@@ -833,22 +878,21 @@
                     };
                 }
 
-                // Registrations / participant preview
+                // Show only the authenticated attendee's own registration state.
                 const regContainer = document.getElementById('eventDetailsRegistrations');
-                regContainer.innerHTML = 'Loading participants...';
-
-                try {
-                    const regRes = await fetch(`/api/events/${eventId}/registrations`);
-                    const regs = await regRes.json();
-                    if (Array.isArray(regs) && regs.length > 0) {
-                        regContainer.innerHTML = `
-                            <span><i class="fas fa-user-check" style="color: var(--success);"></i> ${regs.length} participant(s) registered</span>
-                        `;
-                    } else {
-                        regContainer.innerHTML = 'Be the first to register for this event!';
+                if (!currentAuthUser) {
+                    regContainer.textContent = 'Log in as a user to view your registration status.';
+                } else {
+                    regContainer.textContent = 'Loading your registration status...';
+                    try {
+                        const regRes = await fetch(`/api/events/${eventId}/registration`);
+                        const regData = await regRes.json();
+                        regContainer.textContent = regData.registered
+                            ? 'You are registered for this event.'
+                            : 'You are not registered for this event.';
+                    } catch {
+                        regContainer.textContent = 'Registration status unavailable.';
                     }
-                } catch {
-                    regContainer.innerHTML = 'Registration information unavailable.';
                 }
 
                 modal.style.display = 'flex';
@@ -882,8 +926,7 @@
         });
 
         // Initialize
-        initAuthStatus();
-        fetchEvents();
+        Promise.all([initAuthStatus(), fetchEvents()]);
     </script>
 </body>
 </html>

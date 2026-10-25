@@ -26,19 +26,19 @@ EventTrack is a Flask and Google Cloud Firestore (Firebase) event management pla
 
 EventTrack provides an API-driven event management workflow:
 
-1. **Event Management (Admin)**: Create, view, update, and soft-delete events with duplicate-name prevention and strict field validation.
+1. **Event Management (Admin)**: Create, view, update, and delete events with duplicate-name prevention and strict field validation.
 2. **Event Lifecycle & Expiry**:
    - Active upcoming events appear in the active management list and attendee catalog.
    - Ended events automatically transition to an archive state without database record deletion.
    - Past events remain accessible via an admin **Past / Archived Events** view for audit history.
 3. **Attendee Registration**:
-   - Users browse upcoming events and register with an existing username.
+   - Logged-in users browse upcoming events and register as the identity held in their session.
    - Registration is rejected on expired events on both frontend and backend.
-   - Direct backend API requests cannot bypass registration closure.
+   - Anonymous requests cannot register or choose another user's identity.
 4. **Attendee Privacy & IDOR Prevention**:
-   - Non-admin visitors querying registrations receive masked usernames (e.g., `jo***`), preventing participant list harvesting.
-   - Administrators see full participant usernames and registration timestamps.
-5. **User Management (Admin)**: View all registered users, update account status and roles, and delete accounts. Passwords are never returned in user listings.
+   - Only administrators can view paginated attendee names and timestamps.
+   - Logged-in users can see only whether they personally registered; anonymous visitors cannot query registrations.
+5. **User Management (Admin)**: View paginated registered users, create accounts with initial passwords, update account status and roles, and delete accounts. Passwords are never returned in user listings. Accounts assigned the `admin` role authenticate through the admin login; deactivation or demotion invalidates their session on the next protected request.
 6. **Application Settings (Admin)**: Manage UI preferences (theme, dark mode, default view, events per page) with server-side key allowlisting.
 7. **Responsive Interface**: All administrative and user interfaces adapt cleanly across mobile (`< 768px`), tablet, and desktop viewports.
 
@@ -49,6 +49,7 @@ EventTrack provides an API-driven event management workflow:
 - **Backend Framework**: Python 3.10+ / Flask 3.0.3
 - **Database**: Google Firebase Cloud Firestore (NoSQL) via `firebase-admin` 6.5.0
 - **Cross-Origin Handling**: `flask-cors` 4.0.1
+- **Rate Limiting**: Flask-Limiter 3.12 with shared Redis storage for multi-worker deployments
 - **Environment Management**: `python-dotenv` 1.0.0
 - **Testing**: `pytest` 8.2+ / 9.1+
 - **Frontend**: HTML5, Vanilla CSS3, JavaScript (Fetch API)
@@ -74,7 +75,7 @@ Event-track/
     │   ├── user_events.html        # Attendee event discovery and registration portal
     │   └── users.html              # Admin user management view
     └── tests/
-        └── test_eventtrack.py      # Automated PyTest test suite (21 test cases)
+        └── test_eventtrack.py      # Automated PyTest test suite
 ```
 
 ---
@@ -99,6 +100,8 @@ python -m venv .venv
 
 # Install dependencies
 pip install -r requirements.txt
+$env:SECRET_KEY = (& python -c "import secrets; print(secrets.token_hex(32))")
+$env:RATELIMIT_STORAGE_URI = "memory://"
 ```
 
 ### Git Bash / Linux / macOS
@@ -115,6 +118,8 @@ source .venv/bin/activate  # On Windows Git Bash: source .venv/Scripts/activate
 
 # Install dependencies
 pip install -r requirements.txt
+export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
+export RATELIMIT_STORAGE_URI="memory://"
 ```
 
 ---
@@ -145,25 +150,32 @@ EventTrack supports the following configuration environment variables:
 
 | Variable | Description | Default Value | Confirmed in Code |
 |:---|:---|:---|:---:|
-| `SECRET_KEY` | Secret key used to cryptographically sign Flask session cookies. | `dev-secret-change-in-production` | Yes (`even.py:12`) |
-| `ALLOWED_ORIGIN` | Allowed origin for CORS headers. | `http://localhost:5000` | Yes (`even.py:15`) |
-| `FLASK_DEBUG` | Enables Flask interactive debug mode (`true` or `false`). | `false` | Yes (`even.py:768`) |
-| `FIREBASE_CREDENTIALS_PATH` | Explicit path to the Firebase service account JSON key. | `firebase-service-account-key.json` | Yes (`even.py:47`) |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Standard Google Cloud credentials path fallback. | None | Yes (`even.py:48`) |
+| `SECRET_KEY` | Secret key used to cryptographically sign Flask session cookies; must contain at least 32 characters. | Required | Yes |
+| `ALLOWED_ORIGIN` | Allowed origin for CORS headers. | `http://localhost:5000` | Yes |
+| `FLASK_DEBUG` | Enables Flask interactive debug mode (`true` or `false`). | `false` | Yes |
+| `SESSION_COOKIE_SECURE` | Adds the Secure attribute to session cookies; enable behind HTTPS. | `false` | Yes |
+| `RATELIMIT_STORAGE_URI` | Flask-Limiter backend URI. Use `memory://` only for local single-process development; use shared Redis in production. | Required | Yes |
+| `TRUSTED_PROXY_COUNT` | Number of trusted reverse-proxy hops used to restore client IP for rate limits. Only set when direct public access to Flask is blocked. | `0` | Yes |
+| `FIREBASE_CREDENTIALS_PATH` | Explicit path to the Firebase service account JSON key. | `firebase-service-account-key.json` | Yes |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Standard Google Cloud credentials path fallback. | None | Yes |
 
 ### Setting Environment Variables Example
 
 **PowerShell:**
 ```powershell
-$env:SECRET_KEY = "your-custom-production-secret-key"
+$env:SECRET_KEY = (& python -c "import secrets; print(secrets.token_hex(32))")
 $env:FLASK_DEBUG = "false"
+$env:SESSION_COOKIE_SECURE = "false" # Set to true when serving over HTTPS.
+$env:RATELIMIT_STORAGE_URI = "memory://" # Local, single-process use only.
 $env:FIREBASE_CREDENTIALS_PATH = "C:\secure\firebase-service-account-key.json"
 ```
 
 **Bash:**
 ```bash
-export SECRET_KEY="your-custom-production-secret-key"
+export SECRET_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
 export FLASK_DEBUG="false"
+export SESSION_COOKIE_SECURE="true" # Use false only for local HTTP development.
+export RATELIMIT_STORAGE_URI="rediss://user:password@redis.example.com:6379/0"
 export FIREBASE_CREDENTIALS_PATH="/secure/firebase-service-account-key.json"
 ```
 
@@ -171,7 +183,7 @@ export FIREBASE_CREDENTIALS_PATH="/secure/firebase-service-account-key.json"
 
 ## Running the Application
 
-Make sure your virtual environment is active and Firebase credentials are in place:
+Make sure your virtual environment is active, a 32-character-or-longer `SECRET_KEY`, `RATELIMIT_STORAGE_URI`, and Firebase credentials are configured:
 
 ```bash
 python even.py
@@ -192,6 +204,12 @@ The application will start on `http://127.0.0.1:5000`.
 
 ### Role-Based Access Control
 - **Session Authentication**: Handled via signed Flask session cookies (`session['admin_logged_in']` and `session['user_logged_in']`).
+- Admin accounts cannot be created publicly; `POST /register/admin` requires an authenticated administrator. Provision the initial administrator through a trusted operator-controlled process.
+- Session cookies are HttpOnly and SameSite=Lax. Set `SESSION_COOKIE_SECURE=true` when HTTPS is enabled; the application refuses to start if `SECRET_KEY` is missing or shorter than 32 characters.
+- Every state-changing request must include the session-bound `X-CSRF-Token`. Rendered pages supply a token and their same-origin `fetch` requests add the header. Direct API clients must first render a page or request `GET /api/csrf-token`, retain the session cookie, and send that token on each `POST`, `PUT`, `PATCH`, or `DELETE`.
+- Login is limited to 5 attempts per minute and 30 per hour per client IP; public user signup to 5 per hour; admin/user provisioning to 10 per hour. All rate limits use the configured storage backend. `memory://` is process-local and only suitable for local development; production workers must share a Redis-compatible service. Keep Redis credentials out of source control and use TLS where supported.
+- If deployed behind a reverse proxy, set `TRUSTED_PROXY_COUNT` only to the exact number of trusted proxy hops and block direct access to the Flask server. Otherwise, leave it at `0` and do not trust forwarded headers.
+- To bootstrap the first administrator, use a trusted operator workstation to create an `admins` Firestore document containing `username` and a Werkzeug password hash. Generate the hash with `python -c "from getpass import getpass; from werkzeug.security import generate_password_hash; print(generate_password_hash(getpass()))"`. Do not place the plaintext password or service-account key in source control.
 - **Authorization Guard**: The `@require_admin_session` decorator protects:
   - `POST /api/events` (Create event)
   - `PUT /api/events/<event_id>` (Update event)
@@ -202,22 +220,25 @@ The application will start on `http://127.0.0.1:5000`.
   - `DELETE /api/users/<user_id>` (Delete user account)
   - `GET /api/settings` and `POST /api/settings` (Read/write settings)
 - Unauthenticated or regular user requests to these endpoints return HTTP `401 Unauthorized`.
+- Admin-created user records require an initial password. A `user` role logs in through `/login/user`; an `admin` role logs in through `/login/admin`. Existing legacy admin accounts in the separate `admins` collection continue to authenticate there.
 
 ### Server-Side Input Validation
 - Event names, locations, and descriptions are trimmed and validated via `_safe_str()`. Empty or whitespace-only inputs are rejected with HTTP `400 Bad Request`.
 - Event name uniqueness is enforced on both creation and renaming.
+- New usernames use deterministic account IDs plus username-reservation documents, written atomically. Event names use reservation documents committed atomically with event creation/rename/deletion. Registrations use a deterministic `(event_id, username)` document ID. Existing random-ID accounts, events, and registrations are checked before writes and are not destructively migrated.
+- Event listings, admin user listings, and admin registration details are paginated (default 50 items, maximum 100) and return `next_cursor`; the interfaces provide a “Load more” control.
 - Settings updates enforce an explicit key allowlist (`theme`, `darkMode`, `defaultView`, `eventsPerPage`, `notifications`, `emailNotifications`, `emailAddress`). Unrecognized fields are stripped.
 
 ### Known Security Limitations & Migration Requirements
-1. **Password Storage (SHA-256)**:
-   - Passwords currently use standard SHA-256 hashing (`hashlib.sha256`).
-   - Plain SHA-256 is a fast cryptographic digest without salt or configurable work factor; it is **not** a secure long-term password-hashing algorithm and is vulnerable to GPU-based dictionary and rainbow table attacks.
-   - **Required Migration**: Migrate password storage to a dedicated, salted algorithm such as `bcrypt`, `argon2id`, or official Firebase Authentication prior to production deployment.
+1. **Legacy Password Migration**:
+   - New passwords use Werkzeug's salted, work-factor-based password hash.
+   - Existing SHA-256 hashes and plaintext password fields are accepted only to complete a successful login, then upgraded to a new hash and the plaintext field is deleted.
+   - Rotate any credentials that may have been exposed and monitor old accounts for successful migration.
 2. **Cloud Firestore Security Rules**:
    - The backend accesses Firestore using a privileged server-side service account via `firebase-admin`, which bypasses Firestore Security Rules.
    - If client-side Firebase libraries or public web API keys are ever added to frontend templates, production Firestore Security Rules must be independently verified in the Firebase Console to prevent public database access.
 3. **CSRF Tokens**:
-   - Session authentication uses cookies without explicit CSRF tokens on HTML forms. State-changing operations currently rely on JSON payloads and same-origin CORS restrictions.
+   - State-changing requests require a session-bound CSRF token. Browser clients use the token rendered into same-origin pages; direct clients must retain and send it with the session cookie.
 
 ---
 
@@ -255,30 +276,15 @@ pytest tests/ -v
 pytest EvenTrack-main/tests/ -v
 ```
 
-### Verified Test Results (21/21 Passing)
-Tests run with an isolated Firestore mock fixture without requiring a production Firebase key and without touching live database collections:
+Tests run with an isolated Firestore mock fixture; they do not require production Firebase credentials and do not access live collections. Coverage includes:
 
-1. `test_unauthenticated_cannot_access_admin_operations` — All admin endpoints return 401 when unauthenticated.
-2. `test_regular_user_cannot_perform_admin_operations` — Regular user sessions cannot access admin endpoints.
-3. `test_user_registration_privacy` — Unauthenticated visitors receive masked attendee names (`jo***`).
-4. `test_invalid_event_input_is_rejected` — Missing/empty fields and malformed dates return 400.
-5. `test_registration_succeeds_before_deadline` — Valid registrations on future events succeed.
-6. `test_registration_rejected_at_or_after_deadline` — Registrations on past events return 400.
-7. `test_direct_backend_request_cannot_bypass_closed_registration` — Direct API POST requests on expired events fail.
-8. `test_ended_events_disappear_from_active_list` — `GET /api/events` excludes ended events.
-9. `test_expiry_does_not_destroy_history_or_records` — Expired events retain fields and data intact.
-10. `test_date_parsing_and_timezone` — Verifies UTC and Asia/Kolkata (IST) date conversions.
-11. `test_settings_allowed_keys_validation` — Unallowed keys in settings updates are stripped.
-12. `test_all_html_pages_render` — All 6 application HTML routes return HTTP 200 with responsive viewport meta tags.
-13. `test_auth_status_and_logout` — Tests `/api/auth-status` and session invalidation on `/logout`.
-14. `test_password_hashing_security` — Verifies passwords are not stored in plaintext.
-15. `test_registration_requires_existing_account` — Phantom user auto-creation is prevented.
-16. `test_get_users_strips_passwords` — Passwords are removed from user listings.
-17. `test_duplicate_event_name_rejected` — Duplicate event names return error.
-18. `test_init_firebase_missing_credentials_raises_file_not_found` — Missing credentials raise clear `FileNotFoundError`.
-19. `test_init_firebase_invalid_credentials_raises_value_error` — Corrupted credentials raise `ValueError`.
-20. `test_init_firebase_custom_client_injection` — Verifies dependency injection of mock clients.
-21. `test_uninitialized_db_access_returns_500` — Database requests without initialized credentials return HTTP 500 cleanly.
+- Authentication, role enforcement, admin-created account login, deactivation, and legacy password migration.
+- CSRF rejection/acceptance and login, registration, and admin-provisioning rate limits.
+- Race-safe duplicate handling for event names, usernames, and event registrations.
+- Event/user pagination, registration privacy, event expiry and timezone behavior.
+- Firebase initialization, user-list password stripping, settings allowlisting, and HTML template rendering.
+
+Use the test command above for the current pass count; do not rely on a manually maintained historical test total.
 
 ---
 
@@ -337,8 +343,5 @@ The repository currently does not include a standalone `LICENSE` file. Confirm l
 
 ## Future Improvements
 
-- [ ] **Modern Password Hashing**: Migrate from SHA-256 to `argon2id` or `bcrypt`.
 - [ ] **Official Firebase Auth SDK**: Integrate Firebase Authentication for Google/GitHub OAuth2 sign-in.
-- [ ] **CSRF Protection**: Add `Flask-WTF` CSRF tokens for state-changing browser requests.
-- [ ] **Rate Limiting**: Add `Flask-Limiter` to mitigate brute-force attacks on `/login/*` and `/register/*`.
 - [ ] **Containerization**: Provide a production-ready `Dockerfile` and `docker-compose.yml`.

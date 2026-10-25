@@ -2,6 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        (() => {
+            const token = document.querySelector('meta[name="csrf-token"]').content;
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (input, init = {}) => {
+                const request = input instanceof Request ? input : null;
+                const method = (init.method || (request && request.method) || 'GET').toUpperCase();
+                const url = new URL(request ? request.url : input, window.location.href);
+                if (url.origin !== window.location.origin || !['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+                    return originalFetch(input, init);
+                }
+                const headers = new Headers(init.headers || (request && request.headers) || {});
+                headers.set('X-CSRF-Token', token);
+                return originalFetch(input, { ...init, headers });
+            };
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>EventTrack Users Management</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -501,6 +519,9 @@
                     </table>
                 </div>
             </section>
+            <div style="text-align: center; margin: 16px 0;">
+                <button class="btn btn-secondary" id="loadMoreUsers" onclick="fetchUsers(usersCursor, true)" hidden>Load more users</button>
+            </div>
         </main>
     </div>
 
@@ -517,6 +538,10 @@
                 <div class="form-group">
                     <label for="email">Email *</label>
                     <input type="email" id="email" required placeholder="user@example.com">
+                </div>
+                <div class="form-group" id="passwordGroup">
+                    <label for="password">Initial password *</label>
+                    <input type="password" id="password" minlength="6" maxlength="1024" required autocomplete="new-password">
                 </div>
                 <div class="form-group">
                     <label for="role">Role</label>
@@ -544,6 +569,7 @@
 
     <script>
         let allUsers = [];
+        let usersCursor = null;
 
         function escapeHtml(str) {
             if (!str) return '';
@@ -566,17 +592,27 @@
         }
 
         // Fetch users from backend API
-        async function fetchUsers() {
+        async function fetchUsers(cursor = null, append = false) {
             try {
-                const response = await fetch('/api/users');
+                if (!append) {
+                    cursor = null;
+                    allUsers = [];
+                    usersCursor = null;
+                }
+                const params = new URLSearchParams();
+                if (cursor) params.set('cursor', cursor);
+                const query = params.toString();
+                const response = await fetch(`/api/users${query ? `?${query}` : ''}`);
                 if (response.status === 401) {
                     window.location.href = '/';
                     return;
                 }
                 const data = await response.json();
                 if (data.success && Array.isArray(data.users)) {
-                    allUsers = data.users;
+                    allUsers = append ? allUsers.concat(data.users) : data.users;
+                    usersCursor = data.next_cursor;
                     renderUsers(allUsers);
+                    document.getElementById('loadMoreUsers').hidden = !usersCursor;
                 } else {
                     showNotification(data.error || 'Failed to load users', true);
                 }
@@ -615,10 +651,10 @@
                         <td style="font-size: 0.85rem; color: var(--text-muted);">${lastLoginDisplay}</td>
                         <td>
                             <div class="action-buttons">
-                                <button class="btn btn-sm btn-edit" onclick="editUser('${escapeHtml(user.id)}', '${escapeHtml(user.username)}', '${escapeHtml(user.email)}', '${escapeHtml(user.role)}', '${escapeHtml(user.status)}')">
+                                <button class="btn btn-sm btn-edit" data-user-action="edit" data-user-id="${escapeHtml(user.id)}">
                                     <i class="fas fa-edit"></i>
                                 </button>
-                                <button class="btn btn-sm btn-delete" onclick="deleteUser('${escapeHtml(user.id)}')">
+                                <button class="btn btn-sm btn-delete" data-user-action="delete" data-user-id="${escapeHtml(user.id)}">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             </div>
@@ -626,6 +662,18 @@
                     </tr>
                 `;
             }).join('');
+
+            tbody.querySelectorAll('[data-user-action="edit"]').forEach(button => {
+                button.addEventListener('click', () => {
+                    const user = users.find(item => item.id === button.dataset.userId);
+                    if (user) {
+                        editUser(user.id, user.username, user.email, user.role, user.status);
+                    }
+                });
+            });
+            tbody.querySelectorAll('[data-user-action="delete"]').forEach(button => {
+                button.addEventListener('click', () => deleteUser(button.dataset.userId));
+            });
         }
 
         function handleSearch(query) {
@@ -642,6 +690,8 @@
             document.getElementById('userForm').reset();
             document.getElementById('userId').value = '';
             document.getElementById('username').readOnly = false;
+            document.getElementById('passwordGroup').style.display = '';
+            document.getElementById('password').required = true;
             document.getElementById('userModal').style.display = 'flex';
         }
 
@@ -657,6 +707,8 @@
             document.getElementById('email').value = email;
             document.getElementById('role').value = role || 'user';
             document.getElementById('status').value = status || 'active';
+            document.getElementById('passwordGroup').style.display = 'none';
+            document.getElementById('password').required = false;
             document.getElementById('userModal').style.display = 'flex';
         }
 
@@ -669,6 +721,9 @@
                 role: document.getElementById('role').value,
                 status: document.getElementById('status').value
             };
+            if (!userId) {
+                payload.password = document.getElementById('password').value;
+            }
 
             const url = userId ? `/api/users/${userId}` : '/api/users';
             const method = userId ? 'PUT' : 'POST';

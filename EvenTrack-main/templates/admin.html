@@ -2,6 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        (() => {
+            const token = document.querySelector('meta[name="csrf-token"]').content;
+            const originalFetch = window.fetch.bind(window);
+            window.fetch = (input, init = {}) => {
+                const request = input instanceof Request ? input : null;
+                const method = (init.method || (request && request.method) || 'GET').toUpperCase();
+                const url = new URL(request ? request.url : input, window.location.href);
+                if (url.origin !== window.location.origin || !['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+                    return originalFetch(input, init);
+                }
+                const headers = new Headers(init.headers || (request && request.headers) || {});
+                headers.set('X-CSRF-Token', token);
+                return originalFetch(input, { ...init, headers });
+            };
+        })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Dashboard - EventRack</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -275,15 +293,25 @@
     </div>
 
     <script>
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, char => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
+            })[char]);
+        }
+
         // Fetch and display events
         function loadEvents() {
             fetch('/api/events')
                 .then(response => response.json())
-                .then(events => {
+                .then(payload => {
                     const eventsGrid = document.getElementById('eventsGrid');
                     eventsGrid.innerHTML = '';
-                    
-                    events.forEach(event => {
+
+                    (payload.events || []).forEach(event => {
                         const eventCard = createEventCard(event);
                         eventsGrid.appendChild(eventCard);
                     });
@@ -297,22 +325,28 @@
             card.className = 'event-card';
             card.innerHTML = `
                 <div class="event-header">
-                    <h3 class="event-title">${event.name}</h3>
+                    <h3 class="event-title">${escapeHtml(event.name)}</h3>
                     <div class="event-actions">
-                        <button class="action-btn edit-btn" onclick="editEvent(${event.id})">
+                        <button class="action-btn edit-btn" data-event-id="${escapeHtml(event.id)}">
                             <i class="fas fa-edit"></i>
                         </button>
-                        <button class="action-btn delete-btn" onclick="deleteEvent(${event.id})">
+                        <button class="action-btn delete-btn" data-event-id="${escapeHtml(event.id)}">
                             <i class="fas fa-trash"></i>
                         </button>
                     </div>
                 </div>
                 <div class="event-details">
                     <p><i class="fas fa-calendar"></i> ${new Date(event.date).toLocaleString()}</p>
-                    <p><i class="fas fa-map-marker-alt"></i> ${event.location}</p>
-                    <p><i class="fas fa-info-circle"></i> ${event.description}</p>
+                    <p><i class="fas fa-map-marker-alt"></i> ${escapeHtml(event.location)}</p>
+                    <p><i class="fas fa-info-circle"></i> ${escapeHtml(event.description)}</p>
                 </div>
             `;
+            card.querySelector('.edit-btn').addEventListener('click', buttonEvent => {
+                editEvent(buttonEvent.currentTarget.dataset.eventId);
+            });
+            card.querySelector('.delete-btn').addEventListener('click', buttonEvent => {
+                deleteEvent(buttonEvent.currentTarget.dataset.eventId);
+            });
             return card;
         }
 

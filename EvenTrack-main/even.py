@@ -1,19 +1,52 @@
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+from flask import Flask, request, jsonify, render_template, session
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from google.api_core.exceptions import AlreadyExists
 import firebase_admin
 from firebase_admin import credentials, firestore
+import hashlib
+import hmac
 import os
+import secrets
 from datetime import datetime, timezone, timedelta
 from functools import wraps
+from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 
-# SECRET_KEY is required for session-based auth guard. Set via env var in production.
-app.secret_key = os.environ.get('SECRET_KEY', 'dev-secret-change-in-production')
+secret_key = os.environ.get('SECRET_KEY')
+if not secret_key or len(secret_key) < 32:
+    raise RuntimeError("SECRET_KEY must be configured with at least 32 characters.")
+app.secret_key = secret_key
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=os.environ.get('SESSION_COOKIE_SECURE', 'false').lower() == 'true'
+)
+try:
+    trusted_proxy_count = int(os.environ.get('TRUSTED_PROXY_COUNT', '0'))
+except ValueError as exc:
+    raise RuntimeError("TRUSTED_PROXY_COUNT must be a non-negative integer.") from exc
+if trusted_proxy_count < 0:
+    raise RuntimeError("TRUSTED_PROXY_COUNT must be a non-negative integer.")
+if trusted_proxy_count:
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=trusted_proxy_count)
+rate_limit_storage_uri = os.environ.get('RATELIMIT_STORAGE_URI')
+if not rate_limit_storage_uri:
+    raise RuntimeError("RATELIMIT_STORAGE_URI must be configured.")
 
 # Restrict CORS to localhost in development. Set ALLOWED_ORIGIN env var in production.
 _allowed_origin = os.environ.get('ALLOWED_ORIGIN', 'http://localhost:5000')
 CORS(app, origins=[_allowed_origin], supports_credentials=True)
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=[],
+    storage_uri=rate_limit_storage_uri,
+    headers_enabled=True
+)
 
 # Application Timezone: Asia/Kolkata (IST = UTC + 5:30)
 IST = timezone(timedelta(hours=5, minutes=30))
@@ -85,7 +118,7 @@ def _ensure_db_initialized():
             app.logger.error("Database initialization failed: %s", e)
             return jsonify({
                 'success': False,
-                'error': f"Database service unavailable: {e}"
+                'error': 'Database service unavailable'
             }), 500
 
 # ----------------------------
@@ -98,6 +131,16 @@ def require_admin_session(f):
     def decorated(*args, **kwargs):
         if not session.get('admin_logged_in'):
             return jsonify({'success': False, 'error': 'Unauthorized: Admin access required'}), 401
+        if session.get('admin_account_source') == 'users':
+            try:
+                account = db.collection('users').document(session.get('admin_account_id')).get()
+                if not account.exists or account.to_dict().get('role') != 'admin' \
+                        or account.to_dict().get('status', 'active') != 'active':
+                    session.clear()
+                    return jsonify({'success': False, 'error': 'Unauthorized: Admin account is inactive'}), 401
+            except Exception as e:
+                app.logger.error("admin session validation failed: %s", e)
+                return jsonify({'success': False, 'error': 'Authentication service unavailable'}), 500
         return f(*args, **kwargs)
     return decorated
 
@@ -110,6 +153,102 @@ def require_user_session(f):
             return jsonify({'success': False, 'error': 'Unauthorized: Login required'}), 401
         return f(*args, **kwargs)
     return decorated
+
+
+def csrf_token():
+    token = session.get('_csrf_token')
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session['_csrf_token'] = token
+    return token
+
+
+@app.context_processor
+def inject_csrf_token():
+    return {'csrf_token': csrf_token}
+
+
+@app.before_request
+def _validate_csrf_token():
+    if request.method not in ('POST', 'PUT', 'PATCH', 'DELETE'):
+        return None
+    token = session.get('_csrf_token')
+    provided_token = request.headers.get('X-CSRF-Token', '')
+    if not token or not hmac.compare_digest(token, provided_token):
+        return jsonify({'success': False, 'error': 'CSRF validation failed'}), 403
+    return None
+
+
+@app.errorhandler(429)
+def rate_limit_exceeded(error):
+    return jsonify({'success': False, 'error': 'Too many requests. Please try again later.'}), 429
+
+
+def _stable_document_id(*parts):
+    value = '\0'.join(parts)
+    return hashlib.sha256(value.encode('utf-8')).hexdigest()
+
+
+def _username_reservation_ref(collection_name, username):
+    reservation_id = _stable_document_id(collection_name, username)
+    return db.collection('username_reservations').document(reservation_id)
+
+
+def _page_size():
+    try:
+        size = int(request.args.get('limit', 50))
+    except ValueError as exc:
+        raise ValueError("limit must be an integer") from exc
+    if size < 1:
+        raise ValueError("limit must be at least 1")
+    return min(size, 100)
+
+
+def _paged_documents(query, collection_ref, page_size):
+    cursor = request.args.get('cursor')
+    if cursor:
+        cursor_doc = collection_ref.document(cursor).get()
+        if not cursor_doc.exists:
+            raise ValueError("Invalid pagination cursor")
+        query = query.start_after(cursor_doc)
+
+    docs = list(query.limit(page_size + 1).stream())
+    has_more = len(docs) > page_size
+    page_docs = docs[:page_size]
+    next_cursor = page_docs[-1].id if has_more and page_docs else None
+    return page_docs, next_cursor
+
+
+def _verify_password(account_doc, account_data, password):
+    stored_hash = account_data.get('password_hash')
+    is_current_hash = isinstance(stored_hash, str) and stored_hash.startswith(('scrypt:', 'pbkdf2:'))
+
+    if is_current_hash:
+        try:
+            password_matches = check_password_hash(stored_hash, password)
+        except ValueError:
+            password_matches = False
+    elif isinstance(stored_hash, str):
+        legacy_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        password_matches = hmac.compare_digest(stored_hash, legacy_hash)
+        if not password_matches and isinstance(account_data.get('password'), str):
+            password_matches = hmac.compare_digest(account_data['password'], password)
+    elif isinstance(account_data.get('password'), str):
+        password_matches = hmac.compare_digest(account_data['password'], password)
+    else:
+        password_matches = False
+
+    if not password_matches:
+        return False
+
+    updates = {}
+    if not is_current_hash:
+        updates['password_hash'] = generate_password_hash(password)
+    if 'password' in account_data:
+        updates['password'] = firestore.DELETE_FIELD
+    if updates:
+        account_doc.reference.update(updates)
+    return True
 
 
 def _safe_str(value, max_len=2000):
@@ -250,7 +389,15 @@ def auth_status():
     return jsonify({'logged_in': False, 'role': None, 'username': None})
 
 
+@app.route('/api/csrf-token', methods=['GET'])
+def get_csrf_token():
+    response = jsonify({'csrf_token': csrf_token()})
+    response.headers['Cache-Control'] = 'no-store'
+    return response
+
+
 @app.route('/register/user', methods=['POST'])
+@limiter.limit('5 per hour')
 def register_user():
     data = request.get_json(silent=True) or {}
     username = _safe_str(data.get('username'), 50)
@@ -258,18 +405,21 @@ def register_user():
 
     if not username:
         return jsonify({'success': False, 'message': 'Username is required'}), 400
-    if not password or len(str(password)) < 6:
-        return jsonify({'success': False, 'message': 'Password must be at least 6 characters'}), 400
+    if not isinstance(password, str) or len(password) < 6 or len(password) > 1024:
+        return jsonify({'success': False, 'message': 'Password must be between 6 and 1024 characters'}), 400
 
     try:
         users_ref = db.collection('users')
         if len(users_ref.where('username', '==', username).limit(1).get()) > 0:
-            return jsonify({'success': False, 'message': 'Username already exists'})
+            return jsonify({'success': False, 'message': 'Username already exists'}), 409
 
-        import hashlib
-        password_hash = hashlib.sha256(str(password).encode()).hexdigest()
+        password_hash = generate_password_hash(password)
 
-        users_ref.add({
+        account_ref = users_ref.document(_stable_document_id('users', username))
+        reservation_ref = _username_reservation_ref('users', username)
+        batch = db.batch()
+        batch.create(reservation_ref, {'account_id': account_ref.id, 'username': username})
+        batch.create(account_ref, {
             'username': username,
             'password_hash': password_hash,
             'email': f"{username}@example.com",
@@ -278,13 +428,18 @@ def register_user():
             'lastLogin': firestore.SERVER_TIMESTAMP,
             'created_at': firestore.SERVER_TIMESTAMP
         })
+        batch.commit()
         return jsonify({'success': True, 'message': 'User registered successfully'})
+    except AlreadyExists:
+        return jsonify({'success': False, 'message': 'Username already exists'}), 409
     except Exception as e:
         app.logger.error("register_user error: %s", e)
         return jsonify({'success': False, 'message': 'Registration failed'}), 500
 
 
 @app.route('/register/admin', methods=['POST'])
+@require_admin_session
+@limiter.limit('10 per hour')
 def register_admin():
     data = request.get_json(silent=True) or {}
     username = _safe_str(data.get('username'), 50)
@@ -292,51 +447,53 @@ def register_admin():
 
     if not username:
         return jsonify({'success': False, 'message': 'Username is required'}), 400
-    if not password or len(str(password)) < 6:
-        return jsonify({'success': False, 'message': 'Password must be at least 6 characters'}), 400
+    if not isinstance(password, str) or len(password) < 6 or len(password) > 1024:
+        return jsonify({'success': False, 'message': 'Password must be between 6 and 1024 characters'}), 400
 
     try:
         admins_ref = db.collection('admins')
         if len(admins_ref.where('username', '==', username).limit(1).get()) > 0:
-            return jsonify({'success': False, 'message': 'Username already exists'})
+            return jsonify({'success': False, 'message': 'Username already exists'}), 409
 
-        import hashlib
-        password_hash = hashlib.sha256(str(password).encode()).hexdigest()
-
-        admins_ref.add({
+        account_ref = admins_ref.document(_stable_document_id('admins', username))
+        reservation_ref = _username_reservation_ref('admins', username)
+        batch = db.batch()
+        batch.create(reservation_ref, {'account_id': account_ref.id, 'username': username})
+        batch.create(account_ref, {
             'username': username,
-            'password_hash': password_hash,
+            'password_hash': generate_password_hash(password),
             'created_at': firestore.SERVER_TIMESTAMP
         })
+        batch.commit()
         return jsonify({'success': True, 'message': 'Admin registered successfully'})
+    except AlreadyExists:
+        return jsonify({'success': False, 'message': 'Username already exists'}), 409
     except Exception as e:
         app.logger.error("register_admin error: %s", e)
         return jsonify({'success': False, 'message': 'Registration failed'}), 500
 
 
 @app.route('/login/user', methods=['POST'])
+@limiter.limit('5 per minute')
+@limiter.limit('30 per hour')
 def login_user():
     data = request.get_json(silent=True) or {}
     username = _safe_str(data.get('username'), 50)
     password = data.get('password')
 
-    if not username or not password:
+    if not username or not isinstance(password, str) or not password or len(password) > 1024:
         return jsonify({'success': False, 'message': 'Credentials required'}), 400
 
     try:
-        import hashlib
-        password_hash = hashlib.sha256(str(password).encode()).hexdigest()
-
         users_ref = db.collection('users')
-        results = users_ref.where('username', '==', username) \
-                           .where('password_hash', '==', password_hash).limit(1).get()
-        if not results:
-            results = users_ref.where('username', '==', username) \
-                               .where('password', '==', password).limit(1).get()
-
-        if results:
+        results = users_ref.where('username', '==', username).limit(1).get()
+        if results and results[0].to_dict().get('status', 'active') == 'active' \
+                and results[0].to_dict().get('role', 'user') == 'user' \
+                and _verify_password(results[0], results[0].to_dict(), password):
+            session.clear()
             session['user_logged_in'] = True
             session['username'] = username
+            session['_csrf_token'] = secrets.token_urlsafe(32)
             return jsonify({'success': True})
         return jsonify({'success': False, 'message': 'Invalid credentials'})
     except Exception as e:
@@ -345,28 +502,38 @@ def login_user():
 
 
 @app.route('/login/admin', methods=['POST'])
+@limiter.limit('5 per minute')
+@limiter.limit('30 per hour')
 def login_admin():
     data = request.get_json(silent=True) or {}
     username = _safe_str(data.get('username'), 50)
     password = data.get('password')
 
-    if not username or not password:
+    if not username or not isinstance(password, str) or not password or len(password) > 1024:
         return jsonify({'success': False, 'message': 'Credentials required'}), 400
 
     try:
-        import hashlib
-        password_hash = hashlib.sha256(str(password).encode()).hexdigest()
-
         admins_ref = db.collection('admins')
-        results = admins_ref.where('username', '==', username) \
-                            .where('password_hash', '==', password_hash).limit(1).get()
-        if not results:
-            results = admins_ref.where('username', '==', username) \
-                                .where('password', '==', password).limit(1).get()
+        results = admins_ref.where('username', '==', username).limit(1).get()
+        account_doc = results[0] if results else None
+        account_data = account_doc.to_dict() if account_doc else None
+        account_source = 'admins'
+        if not account_doc:
+            admin_users = db.collection('users').where('username', '==', username) \
+                .where('role', '==', 'admin').limit(1).get()
+            if admin_users and admin_users[0].to_dict().get('status', 'active') == 'active':
+                account_doc = admin_users[0]
+                account_data = account_doc.to_dict()
+                account_source = 'users'
 
-        if results:
+        if account_doc and account_data and _verify_password(account_doc, account_data, password):
+            session.clear()
             session['admin_logged_in'] = True
             session['username'] = username
+            session['admin_account_source'] = account_source
+            if account_source == 'users':
+                session['admin_account_id'] = account_doc.id
+            session['_csrf_token'] = secrets.token_urlsafe(32)
             return jsonify({'success': True})
         return jsonify({'success': False, 'message': 'Invalid credentials'})
     except Exception as e:
@@ -374,11 +541,9 @@ def login_admin():
         return jsonify({'success': False, 'message': 'Login failed'}), 500
 
 
-@app.route('/logout', methods=['GET', 'POST'])
+@app.route('/logout', methods=['POST'])
 def logout():
     session.clear()
-    if request.method == 'GET':
-        return redirect(url_for('index'))
     return jsonify({'success': True})
 
 
@@ -395,8 +560,10 @@ def get_events():
     """
     include_expired = request.args.get('include_expired', 'false').lower() == 'true'
     try:
+        page_size = _page_size()
         events_ref = db.collection('events')
-        docs = events_ref.order_by('date', direction=firestore.Query.ASCENDING).stream()
+        query = events_ref.order_by('date', direction=firestore.Query.ASCENDING)
+        docs, next_cursor = _paged_documents(query, events_ref, page_size)
         result = []
         for doc in docs:
             d = doc.to_dict()
@@ -404,7 +571,12 @@ def get_events():
             if not include_expired and expired:
                 continue
             result.append(_serialize_event(doc.id, d))
-        return jsonify(result)
+        return jsonify({
+            'events': result,
+            'next_cursor': next_cursor
+        })
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         app.logger.error("get_events error: %s", e)
         return jsonify({'success': False, 'error': 'Failed to fetch events'}), 500
@@ -433,16 +605,23 @@ def create_event():
     try:
         events_ref = db.collection('events')
         if len(events_ref.where('name', '==', name).limit(1).get()) > 0:
-            return jsonify({'success': False, 'error': 'Event with this name already exists'})
+            return jsonify({'success': False, 'error': 'Event with this name already exists'}), 409
 
-        _, doc_ref = events_ref.add({
+        event_ref = events_ref.document()
+        name_ref = db.collection('event_names').document(_stable_document_id(name))
+        batch = db.batch()
+        batch.create(name_ref, {'event_id': event_ref.id, 'name': name})
+        batch.create(event_ref, {
             'name': name,
             'date': date_obj,
             'location': location,
             'description': description,
             'created_at': firestore.SERVER_TIMESTAMP
         })
-        return jsonify({'success': True, 'id': doc_ref.id})
+        batch.commit()
+        return jsonify({'success': True, 'id': event_ref.id})
+    except AlreadyExists:
+        return jsonify({'success': False, 'error': 'Event with this name already exists'}), 409
     except Exception as e:
         app.logger.error("create_event error: %s", e)
         return jsonify({'success': False, 'error': 'Failed to create event'}), 500
@@ -483,18 +662,40 @@ def update_event(event_id):
 
     try:
         events_ref = db.collection('events')
+        event_ref = events_ref.document(event_id)
+        current_event = event_ref.get()
+        if not current_event.exists:
+            return jsonify({'success': False, 'error': 'Event not found'}), 404
+
         for doc in events_ref.where('name', '==', name).stream():
             if doc.id != event_id:
-                return jsonify({'success': False, 'error': 'Another event with this name already exists'})
+                return jsonify({'success': False, 'error': 'Another event with this name already exists'}), 409
 
-        events_ref.document(event_id).update({
+        old_name = current_event.to_dict().get('name')
+        name_ref = db.collection('event_names').document(_stable_document_id(name))
+        reservation = name_ref.get()
+        if reservation.exists and reservation.to_dict().get('event_id') != event_id:
+            return jsonify({'success': False, 'error': 'Another event with this name already exists'}), 409
+
+        batch = db.batch()
+        if not reservation.exists:
+            batch.create(name_ref, {'event_id': event_id, 'name': name})
+        if old_name and old_name != name:
+            old_name_ref = db.collection('event_names').document(_stable_document_id(old_name))
+            old_reservation = old_name_ref.get()
+            if old_reservation.exists and old_reservation.to_dict().get('event_id') == event_id:
+                batch.delete(old_name_ref)
+        batch.update(event_ref, {
             'name': name,
             'date': date_obj,
             'location': location,
             'description': description,
             'updated_at': firestore.SERVER_TIMESTAMP
         })
+        batch.commit()
         return jsonify({'success': True})
+    except AlreadyExists:
+        return jsonify({'success': False, 'error': 'Another event with this name already exists'}), 409
     except Exception as e:
         app.logger.error("update_event error: %s", e)
         return jsonify({'success': False, 'error': 'Failed to update event'}), 500
@@ -504,7 +705,20 @@ def update_event(event_id):
 @require_admin_session
 def delete_event(event_id):
     try:
-        db.collection('events').document(event_id).delete()
+        events_ref = db.collection('events')
+        event_ref = events_ref.document(event_id)
+        event_doc = event_ref.get()
+        if not event_doc.exists:
+            return jsonify({'success': False, 'error': 'Event not found'}), 404
+        batch = db.batch()
+        event_name = event_doc.to_dict().get('name')
+        if event_name:
+            name_ref = db.collection('event_names').document(_stable_document_id(event_name))
+            name_doc = name_ref.get()
+            if name_doc.exists and name_doc.to_dict().get('event_id') == event_id:
+                batch.delete(name_ref)
+        batch.delete(event_ref)
+        batch.commit()
         return jsonify({'success': True})
     except Exception as e:
         app.logger.error("delete_event error: %s", e)
@@ -517,10 +731,9 @@ def delete_event(event_id):
 
 @app.route('/api/events/<event_id>/register', methods=['POST'])
 def register_for_event(event_id):
-    data = request.get_json(silent=True) or {}
-    username = _safe_str(data.get('username'), 50)
-    if not username:
-        return jsonify({'success': False, 'error': 'Username is required'}), 400
+    if not session.get('user_logged_in') or not session.get('username'):
+        return jsonify({'success': False, 'error': 'Unauthorized: User login required'}), 401
+    username = session['username']
 
     try:
         # 1. Verify event exists
@@ -538,39 +751,40 @@ def register_for_event(event_id):
         users_ref = db.collection('users')
         user_docs = users_ref.where('username', '==', username).limit(1).get()
         if len(user_docs) == 0:
-            return jsonify({'success': False, 'error': 'User not found. Please register an account first.'}), 404
+            return jsonify({'success': False, 'error': 'User account is unavailable'}), 401
+        if user_docs[0].to_dict().get('status', 'active') != 'active':
+            session.clear()
+            return jsonify({'success': False, 'error': 'User account is inactive'}), 403
 
         # 4. Check duplicate registration
         reg_ref = db.collection('registrations')
         if len(reg_ref.where('event_id', '==', event_id)
                       .where('username', '==', username).limit(1).get()) > 0:
-            return jsonify({'success': False, 'error': 'Already registered for this event'})
+            return jsonify({'success': False, 'error': 'Already registered for this event'}), 409
 
         # 5. Create registration record
-        reg_ref.add({
+        registration_id = _stable_document_id(event_id, username)
+        reg_ref.document(registration_id).create({
             'event_id': event_id,
             'username': username,
             'registered_at': firestore.SERVER_TIMESTAMP
         })
         return jsonify({'success': True, 'message': 'Registered successfully'})
+    except AlreadyExists:
+        return jsonify({'success': False, 'error': 'Already registered for this event'}), 409
     except Exception as e:
         app.logger.error("register_for_event error: %s", e)
         return jsonify({'success': False, 'error': 'Registration failed'}), 500
 
 
 @app.route('/api/events/<event_id>/registrations', methods=['GET'])
+@require_admin_session
 def get_event_registrations(event_id):
-    """
-    Return registration list for an event.
-    Admin sees full participant details.
-    Regular users see their own record or masked attendance names to protect user privacy.
-    """
     try:
+        page_size = _page_size()
         reg_ref = db.collection('registrations')
-        registrations = reg_ref.where('event_id', '==', event_id).stream()
-        is_admin = session.get('admin_logged_in', False)
-        current_username = session.get('username')
-
+        query = reg_ref.where('event_id', '==', event_id).order_by('__name__')
+        registrations, next_cursor = _paged_documents(query, reg_ref, page_size)
         result = []
         for reg in registrations:
             d = reg.to_dict()
@@ -580,21 +794,27 @@ def get_event_registrations(event_id):
                 d['registered_at'] = ra.isoformat()
             elif ra is not None and hasattr(ra, 'seconds'):
                 d['registered_at'] = datetime.fromtimestamp(ra.seconds, tz=timezone.utc).isoformat()
-
-            if is_admin:
-                result.append(d)
-            elif current_username and d.get('username') == current_username:
-                result.append(d)
-            else:
-                masked = dict(d)
-                uname = masked.get('username', '')
-                masked['username'] = uname[:2] + '***' if len(uname) > 2 else 'Attendee'
-                result.append(masked)
-
-        return jsonify(result)
+            result.append(d)
+        return jsonify({'registrations': result, 'next_cursor': next_cursor})
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         app.logger.error("get_event_registrations error: %s", e)
         return jsonify({'success': False, 'error': 'Failed to fetch registrations'}), 500
+
+
+@app.route('/api/events/<event_id>/registration', methods=['GET'])
+@require_user_session
+def get_user_event_registration(event_id):
+    if session.get('admin_logged_in') and not session.get('user_logged_in'):
+        return jsonify({'registered': False})
+    try:
+        reg = db.collection('registrations').where('event_id', '==', event_id) \
+            .where('username', '==', session['username']).limit(1).get()
+        return jsonify({'registered': bool(reg)})
+    except Exception as e:
+        app.logger.error("get_user_event_registration error: %s", e)
+        return jsonify({'success': False, 'error': 'Failed to fetch registration status'}), 500
 
 
 # ----------------------------
@@ -605,9 +825,12 @@ def get_event_registrations(event_id):
 @require_admin_session
 def get_users():
     try:
+        page_size = _page_size()
         users_ref = db.collection('users')
         user_list = []
-        for user in users_ref.stream():
+        query = users_ref.order_by('__name__')
+        users, next_cursor = _paged_documents(query, users_ref, page_size)
+        for user in users:
             d = user.to_dict()
             d['id'] = user.id
             # Strip passwords and hashes
@@ -621,7 +844,13 @@ def get_users():
                 elif ts is not None and hasattr(ts, 'seconds'):
                     d[field] = datetime.fromtimestamp(ts.seconds, tz=timezone.utc).isoformat()
             user_list.append(d)
-        return jsonify({'success': True, 'users': user_list})
+        return jsonify({
+            'success': True,
+            'users': user_list,
+            'next_cursor': next_cursor
+        })
+    except ValueError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
     except Exception as e:
         app.logger.error("get_users error: %s", e)
         return jsonify({'success': False, 'error': 'Failed to fetch users'}), 500
@@ -629,12 +858,14 @@ def get_users():
 
 @app.route('/api/users', methods=['POST'])
 @require_admin_session
+@limiter.limit('10 per hour')
 def create_user():
     data = request.get_json(silent=True) or {}
     username = _safe_str(data.get('username'), 50)
     email = _safe_str(data.get('email'), 200)
     role = data.get('role', 'user')
     status = data.get('status', 'active')
+    password = data.get('password')
 
     if not username:
         return jsonify({'success': False, 'error': 'Username is required'}), 400
@@ -642,18 +873,31 @@ def create_user():
         return jsonify({'success': False, 'error': 'Invalid role'}), 400
     if status not in ('active', 'inactive'):
         return jsonify({'success': False, 'error': 'Invalid status'}), 400
+    if not isinstance(password, str) or len(password) < 6 or len(password) > 1024:
+        return jsonify({'success': False, 'error': 'Password must be between 6 and 1024 characters'}), 400
 
     try:
         users_ref = db.collection('users')
-        _, doc_ref = users_ref.add({
+        if len(users_ref.where('username', '==', username).limit(1).get()) > 0:
+            return jsonify({'success': False, 'error': 'Username already exists'}), 409
+
+        doc_ref = users_ref.document(_stable_document_id('users', username))
+        reservation_ref = _username_reservation_ref('users', username)
+        batch = db.batch()
+        batch.create(reservation_ref, {'account_id': doc_ref.id, 'username': username})
+        batch.create(doc_ref, {
             'username': username,
+            'password_hash': generate_password_hash(password),
             'email': email or f"{username}@example.com",
             'role': role,
             'status': status,
-            'lastLogin': firestore.SERVER_TIMESTAMP,
+            'lastLogin': None,
             'created_at': firestore.SERVER_TIMESTAMP
         })
+        batch.commit()
         return jsonify({'success': True, 'id': doc_ref.id})
+    except AlreadyExists:
+        return jsonify({'success': False, 'error': 'Username already exists'}), 409
     except Exception as e:
         app.logger.error("create_user error: %s", e)
         return jsonify({'success': False, 'error': 'Failed to create user'}), 500
@@ -676,14 +920,39 @@ def update_user(user_id):
         return jsonify({'success': False, 'error': 'Invalid status'}), 400
 
     try:
-        db.collection('users').document(user_id).update({
+        users_ref = db.collection('users')
+        user_ref = users_ref.document(user_id)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        current_user = user_doc.to_dict()
+        existing_users = users_ref.where('username', '==', username).limit(2).get()
+        if any(user.id != user_id for user in existing_users):
+            return jsonify({'success': False, 'error': 'Username already exists'}), 409
+
+        batch = db.batch()
+        if current_user.get('username') != username:
+            reservation_ref = _username_reservation_ref('users', username)
+            reservation = reservation_ref.get()
+            if reservation.exists and reservation.to_dict().get('account_id') != user_id:
+                return jsonify({'success': False, 'error': 'Username already exists'}), 409
+            if not reservation.exists:
+                batch.create(reservation_ref, {'account_id': user_id, 'username': username})
+            old_reservation_ref = _username_reservation_ref('users', current_user.get('username', ''))
+            old_reservation = old_reservation_ref.get()
+            if old_reservation.exists and old_reservation.to_dict().get('account_id') == user_id:
+                batch.delete(old_reservation_ref)
+        batch.update(user_ref, {
             'username': username,
             'email': email or f"{username}@example.com",
             'role': role,
             'status': status,
             'updated_at': firestore.SERVER_TIMESTAMP
         })
+        batch.commit()
         return jsonify({'success': True})
+    except AlreadyExists:
+        return jsonify({'success': False, 'error': 'Username already exists'}), 409
     except Exception as e:
         app.logger.error("update_user error: %s", e)
         return jsonify({'success': False, 'error': 'Failed to update user'}), 500
@@ -693,7 +962,18 @@ def update_user(user_id):
 @require_admin_session
 def delete_user(user_id):
     try:
-        db.collection('users').document(user_id).delete()
+        user_ref = db.collection('users').document(user_id)
+        user_doc = user_ref.get()
+        if not user_doc.exists:
+            return jsonify({'success': False, 'error': 'User not found'}), 404
+        user_data = user_doc.to_dict()
+        batch = db.batch()
+        reservation_ref = _username_reservation_ref('users', user_data.get('username', ''))
+        reservation = reservation_ref.get()
+        if reservation.exists and reservation.to_dict().get('account_id') == user_id:
+            batch.delete(reservation_ref)
+        batch.delete(user_ref)
+        batch.commit()
         return jsonify({'success': True})
     except Exception as e:
         app.logger.error("delete_user error: %s", e)

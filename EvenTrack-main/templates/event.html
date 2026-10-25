@@ -2,6 +2,24 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <script>
+    (() => {
+      const token = document.querySelector('meta[name="csrf-token"]').content;
+      const originalFetch = window.fetch.bind(window);
+      window.fetch = (input, init = {}) => {
+        const request = input instanceof Request ? input : null;
+        const method = (init.method || (request && request.method) || 'GET').toUpperCase();
+        const url = new URL(request ? request.url : input, window.location.href);
+        if (url.origin !== window.location.origin || !['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+          return originalFetch(input, init);
+        }
+        const headers = new Headers(init.headers || (request && request.headers) || {});
+        headers.set('X-CSRF-Token', token);
+        return originalFetch(input, { ...init, headers });
+      };
+    })();
+  </script>
   <title>EventTrack Login</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -231,14 +249,6 @@
 
     <!-- Registration -->
     <form id="registerForm" class="form-group">
-      <div class="role-selector">
-        <div class="role-option active" data-role="user">
-          <i class="fas fa-user"></i> User
-        </div>
-        <div class="role-option" data-role="admin">
-          <i class="fas fa-user-shield"></i> Admin
-        </div>
-      </div>
       <div class="input-group">
         <i class="fas fa-user"></i>
         <input type="text" id="newUser" placeholder="New Username" required>
@@ -259,18 +269,6 @@
       user: document.getElementById("userForm"),
       register: document.getElementById("registerForm"),
     };
-
-    // Role selection for registration
-    const roleOptions = document.querySelectorAll('.role-option');
-    let selectedRole = 'user';
-
-    roleOptions.forEach(option => {
-      option.addEventListener('click', () => {
-        roleOptions.forEach(opt => opt.classList.remove('active'));
-        option.classList.add('active');
-        selectedRole = option.dataset.role;
-      });
-    });
 
     selector.addEventListener("change", () => {
       for (let key in forms) {
@@ -338,9 +336,7 @@
       const username = document.getElementById("newUser").value;
       const password = document.getElementById("newPass").value;
 
-      const endpoint = selectedRole === 'admin' ? '/register/admin' : '/register/user';
-
-      fetch(endpoint, {
+      fetch('/register/user', {
         method: 'POST',
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password })
@@ -348,8 +344,8 @@
       .then(res => res.json())
       .then(data => {
         if (data.success) {
-          alert(`Registration successful! Please login as ${selectedRole}.`);
-          selector.value = selectedRole;
+          alert('Registration successful! Please login as a user.');
+          selector.value = 'user';
           selector.dispatchEvent(new Event('change'));
         } else {
           showError('register', data.message || "Registration failed");
